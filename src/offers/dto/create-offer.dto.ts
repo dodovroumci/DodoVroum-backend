@@ -10,15 +10,30 @@ export class CreateOfferDto {
   @IsString()
   description: string;
 
-  @ApiProperty({ example: 200.00 })
+  @ApiProperty({ example: 300000.00 })
   @IsNumber()
   @Min(0)
   price: number;
 
-  @ApiProperty({ example: 15.5, required: false })
+  @ApiProperty({ example: 7 })
+  @IsNumber()
+  @Min(1)
+  nbJours: number;
+
+  @ApiProperty({ example: 10.0, required: false })
   @IsOptional()
   @IsNumber()
   discount?: number;
+
+  @ApiProperty({ example: 'https://cdn.dodovroum.com/offers/pack1.jpg', required: false })
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @ApiProperty({ example: false, required: false })
+  @IsOptional()
+  @IsBoolean()
+  isVerified?: boolean;
 
   @ApiProperty({ example: 'residence-id-123' })
   @IsString()

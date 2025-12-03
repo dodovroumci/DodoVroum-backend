@@ -2,14 +2,18 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { UpdatePaymentDto } from './dto/update-payment.dto';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class PaymentsService {
   constructor(private prisma: PrismaService) {}
 
-  async create(createPaymentDto: CreatePaymentDto) {
+  async create(createPaymentDto: CreatePaymentDto, userId: string) {
     return this.prisma.payment.create({
-      data: createPaymentDto,
+      data: {
+        ...createPaymentDto,
+        userId, // injecté ici, pas dans le DTO
+      } as Prisma.PaymentUncheckedCreateInput,
       include: {
         user: {
           select: {

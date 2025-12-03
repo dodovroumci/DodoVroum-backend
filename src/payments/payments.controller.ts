@@ -16,10 +16,7 @@ export class PaymentsController {
   @ApiOperation({ summary: 'Créer un paiement' })
   @ApiResponse({ status: 201, description: 'Paiement créé avec succès' })
   create(@Body() createPaymentDto: CreatePaymentDto, @Request() req) {
-    return this.paymentsService.create({
-      ...createPaymentDto,
-      userId: req.user.id,
-    });
+    return this.paymentsService.create(createPaymentDto, req.user.id);
   }
 
   @Get()

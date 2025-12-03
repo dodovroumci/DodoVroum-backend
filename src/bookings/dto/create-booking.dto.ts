@@ -36,8 +36,23 @@ export class CreateBookingDto {
   @IsString()
   offerId?: string;
 
-  @ApiProperty({ enum: BookingStatus, example: BookingStatus.PENDING, required: false })
+  @ApiProperty({ enum: BookingStatus, example: BookingStatus.CONFIRMED, required: false })
   @IsOptional()
   @IsEnum(BookingStatus)
   status?: BookingStatus;
+
+  @ApiProperty({ example: '2024-06-01T14:00:00Z', required: false })
+  @IsOptional()
+  @IsDateString()
+  keyRetrievedAt?: string;
+
+  @ApiProperty({ example: '2024-06-01T14:00:00Z', required: false })
+  @IsOptional()
+  @IsDateString()
+  ownerConfirmedAt?: string;
+
+  @ApiProperty({ example: '2024-06-07T11:00:00Z', required: false })
+  @IsOptional()
+  @IsDateString()
+  checkOutAt?: string;
 }

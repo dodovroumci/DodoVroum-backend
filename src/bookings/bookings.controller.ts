@@ -4,6 +4,7 @@ import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { BookingOwnerOrAdminGuard } from './guards/booking-owner-or-admin.guard';
 
 @ApiTags('bookings')
 @ApiBearerAuth()
@@ -16,10 +17,7 @@ export class BookingsController {
   @ApiOperation({ summary: 'Créer une réservation' })
   @ApiResponse({ status: 201, description: 'Réservation créée avec succès' })
   create(@Body() createBookingDto: CreateBookingDto, @Request() req) {
-    return this.bookingsService.create({
-      ...createBookingDto,
-      userId: req.user.id,
-    });
+    return this.bookingsService.create(createBookingDto, req.user.id);
   }
 
   @Get()
@@ -58,5 +56,71 @@ export class BookingsController {
   @ApiResponse({ status: 404, description: 'Réservation non trouvée' })
   remove(@Param('id') id: string) {
     return this.bookingsService.remove(id);
+  }
+
+  @Patch(':id/approve')
+  @UseGuards(JwtAuthGuard, BookingOwnerOrAdminGuard)
+  @ApiOperation({ 
+    summary: 'Approuver une réservation',
+    description: 'Passe une réservation de PENDING à CONFIRMED. Seul le propriétaire de la résidence/véhicule/offre ou un administrateur peut approuver.'
+  })
+  @ApiResponse({ status: 200, description: 'Réservation approuvée avec succès' })
+  @ApiResponse({ status: 400, description: 'La réservation n\'est pas en attente' })
+  @ApiResponse({ status: 403, description: 'Accès interdit - Vous devez être propriétaire ou administrateur' })
+  @ApiResponse({ status: 404, description: 'Réservation non trouvée' })
+  approve(@Param('id') id: string) {
+    return this.bookingsService.approve(id);
+  }
+
+  @Patch(':id/reject')
+  @UseGuards(JwtAuthGuard, BookingOwnerOrAdminGuard)
+  @ApiOperation({ 
+    summary: 'Rejeter une réservation',
+    description: 'Passe une réservation de PENDING à CANCELLED. Seul le propriétaire de la résidence/véhicule/offre ou un administrateur peut rejeter.'
+  })
+  @ApiResponse({ status: 200, description: 'Réservation rejetée avec succès' })
+  @ApiResponse({ status: 400, description: 'La réservation n\'est pas en attente' })
+  @ApiResponse({ status: 403, description: 'Accès interdit - Vous devez être propriétaire ou administrateur' })
+  @ApiResponse({ status: 404, description: 'Réservation non trouvée' })
+  reject(@Param('id') id: string, @Body() body?: { reason?: string }) {
+    return this.bookingsService.reject(id, body?.reason);
+  }
+
+  @Patch(':id/confirm-key-retrieval')
+  @ApiOperation({ 
+    summary: 'Confirmer la récupération de clé par le client',
+    description: 'Passe une réservation de CONFIRMEE à CHECKIN_CLIENT. Seul le client propriétaire de la réservation peut confirmer.'
+  })
+  @ApiResponse({ status: 200, description: 'Récupération de clé confirmée avec succès' })
+  @ApiResponse({ status: 400, description: 'Action non autorisée ou conditions non remplies' })
+  @ApiResponse({ status: 404, description: 'Réservation non trouvée' })
+  confirmKeyRetrieval(@Param('id') id: string, @Request() req) {
+    return this.bookingsService.confirmKeyRetrieval(id, req.user.id);
+  }
+
+  @Patch(':id/confirm-owner-key-handover')
+  @UseGuards(JwtAuthGuard, BookingOwnerOrAdminGuard)
+  @ApiOperation({ 
+    summary: 'Confirmer la remise de clé par le propriétaire',
+    description: 'Passe une réservation de CHECKIN_CLIENT à CHECKIN_PROPRIO, puis automatiquement à EN_COURS_SEJOUR si les deux ont confirmé. Seul le propriétaire peut confirmer.'
+  })
+  @ApiResponse({ status: 200, description: 'Remise de clé confirmée avec succès' })
+  @ApiResponse({ status: 400, description: 'Action non autorisée ou conditions non remplies' })
+  @ApiResponse({ status: 403, description: 'Accès interdit - Vous devez être propriétaire' })
+  @ApiResponse({ status: 404, description: 'Réservation non trouvée' })
+  confirmOwnerKeyHandover(@Param('id') id: string, @Request() req) {
+    return this.bookingsService.confirmOwnerKeyHandover(id, req.user.id);
+  }
+
+  @Patch(':id/confirm-checkout')
+  @ApiOperation({ 
+    summary: 'Confirmer le check-out par le client',
+    description: 'Passe une réservation de EN_COURS_SEJOUR à TERMINEE. Seul le client propriétaire de la réservation peut confirmer.'
+  })
+  @ApiResponse({ status: 200, description: 'Check-out confirmé avec succès' })
+  @ApiResponse({ status: 400, description: 'Action non autorisée ou conditions non remplies' })
+  @ApiResponse({ status: 404, description: 'Réservation non trouvée' })
+  confirmCheckOut(@Param('id') id: string, @Request() req) {
+    return this.bookingsService.confirmCheckOut(id, req.user.id);
   }
 }

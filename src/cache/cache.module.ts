@@ -1,7 +1,7 @@
 import { Module, Global } from '@nestjs/common';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { redisStore } from 'cache-manager-redis-store';
+import { CacheService } from './cache.service';
 
 @Global()
 @Module({
@@ -13,7 +13,7 @@ import { redisStore } from 'cache-manager-redis-store';
         
         if (redisUrl) {
           return {
-            store: redisStore,
+            store: 'redis',
             url: redisUrl,
             ttl: 300, // 5 minutes par défaut
             max: 1000, // Maximum 1000 entrées
@@ -29,6 +29,7 @@ import { redisStore } from 'cache-manager-redis-store';
       inject: [ConfigService],
     }),
   ],
-  exports: [CacheModule],
+  providers: [CacheService],
+  exports: [CacheModule, CacheService],
 })
 export class CacheConfigModule {}

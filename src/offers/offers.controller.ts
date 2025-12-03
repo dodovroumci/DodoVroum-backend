@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { OffersService } from './offers.service';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { UpdateOfferDto } from './dto/update-offer.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OfferOwnerGuard } from './guards/offer-owner.guard';
 
 @ApiTags('offers')
 @Controller('offers')
@@ -13,10 +14,20 @@ export class OffersController {
   @Post()
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Créer une offre combinée' })
+  @ApiOperation({ 
+    summary: 'Créer une offre combinée',
+    description: 'Crée une offre combinée. Le véhicule et la résidence doivent appartenir au même propriétaire. Les administrateurs peuvent créer des offres pour d\'autres propriétaires.'
+  })
   @ApiResponse({ status: 201, description: 'Offre créée avec succès' })
-  create(@Body() createOfferDto: CreateOfferDto) {
-    return this.offersService.create(createOfferDto);
+  @ApiResponse({ status: 400, description: 'Le véhicule et la résidence doivent appartenir au même propriétaire' })
+  @ApiResponse({ status: 401, description: 'Non autorisé' })
+  @ApiResponse({ status: 404, description: 'Résidence ou véhicule non trouvé' })
+  async create(@Body() createOfferDto: CreateOfferDto, @Request() req) {
+    // Si l'utilisateur est admin, ne pas passer ownerId pour permettre la création pour d'autres propriétaires
+    // Le service utilisera automatiquement le propriétaire de la résidence/véhicule
+    // Si l'utilisateur n'est pas admin, passer son ID pour vérifier qu'il est propriétaire
+    const ownerId = req.user.role === 'ADMIN' ? undefined : req.user.id;
+    return this.offersService.create(createOfferDto, ownerId);
   }
 
   @Get()
@@ -24,6 +35,34 @@ export class OffersController {
   @ApiResponse({ status: 200, description: 'Liste des offres' })
   findAll() {
     return this.offersService.findAll();
+  }
+
+  @Get('my-offers')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Obtenir les offres du propriétaire connecté' })
+  @ApiResponse({ status: 200, description: 'Liste des offres du propriétaire' })
+  @ApiResponse({ status: 401, description: 'Non autorisé' })
+  findMyOffers(@Request() req) {
+    return this.offersService.findByOwner(req.user.id);
+  }
+
+  @Get('owner-properties')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Obtenir les offres du propriétaire connecté (alias pour my-offers)' })
+  @ApiResponse({ status: 200, description: 'Liste des offres du propriétaire' })
+  @ApiResponse({ status: 401, description: 'Non autorisé' })
+  findOwnerProperties(@Request() req) {
+    return this.offersService.findByOwner(req.user.id);
+  }
+
+  @Get('search')
+  @ApiOperation({ summary: 'Rechercher des offres combinées' })
+  @ApiQuery({ name: 'q', description: 'Terme de recherche' })
+  @ApiResponse({ status: 200, description: 'Résultats de recherche' })
+  search(@Query('q') query: string) {
+    return this.offersService.search(query);
   }
 
   @Get(':id')
@@ -34,21 +73,35 @@ export class OffersController {
     return this.offersService.findOne(id);
   }
 
+  @Get(':id/booked-dates')
+  @ApiOperation({ summary: 'Récupérer les plages de dates réservées pour une offre combinée' })
+  @ApiResponse({ status: 200, description: 'Liste des plages réservées' })
+  @ApiResponse({ status: 404, description: 'Offre non trouvée' })
+  getBookedDates(@Param('id') id: string) {
+    return this.offersService.getOccupiedDateRanges(id);
+  }
+
   @Patch(':id')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Mettre à jour une offre' })
+  @UseGuards(JwtAuthGuard, OfferOwnerGuard)
+  @ApiOperation({ 
+    summary: 'Mettre à jour une offre',
+    description: 'Met à jour une offre combinée. Si le véhicule ou la résidence est modifié, ils doivent appartenir au même propriétaire.'
+  })
   @ApiResponse({ status: 200, description: 'Offre mise à jour' })
-  @ApiResponse({ status: 404, description: 'Offre non trouvée' })
+  @ApiResponse({ status: 400, description: 'Le véhicule et la résidence doivent appartenir au même propriétaire' })
+  @ApiResponse({ status: 403, description: 'Accès interdit - Vous n\'êtes pas propriétaire de cette offre' })
+  @ApiResponse({ status: 404, description: 'Offre, résidence ou véhicule non trouvé' })
   update(@Param('id') id: string, @Body() updateOfferDto: UpdateOfferDto) {
     return this.offersService.update(id, updateOfferDto);
   }
 
   @Delete(':id')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, OfferOwnerGuard)
   @ApiOperation({ summary: 'Supprimer une offre' })
   @ApiResponse({ status: 200, description: 'Offre supprimée' })
+  @ApiResponse({ status: 403, description: 'Accès interdit - Vous n\'êtes pas propriétaire de cette offre' })
   @ApiResponse({ status: 404, description: 'Offre non trouvée' })
   remove(@Param('id') id: string) {
     return this.offersService.remove(id);

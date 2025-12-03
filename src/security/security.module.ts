@@ -1,7 +1,7 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
-import compression from 'compression';
+const compression = require('compression');
 
 @Module({})
 export class SecurityModule implements NestModule {

@@ -1,7 +1,7 @@
 # Configuration de l'environnement pour DodoVroum Backend
 
-# Base de données PostgreSQL
-DATABASE_URL="postgresql://username:password@localhost:5432/dodo_vroum_db"
+# Base de données MySQL
+DATABASE_URL="mysql://username:password@localhost:3306/dodo_vroum_db"
 
 # JWT Configuration
 JWT_SECRET="votre-secret-jwt-super-securise"

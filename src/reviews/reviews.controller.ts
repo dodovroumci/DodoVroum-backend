@@ -13,13 +13,16 @@ export class ReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Créer un avis' })
+  @ApiOperation({ 
+    summary: 'Créer un avis',
+    description: 'Crée un avis pour une réservation. Le bookingId est obligatoire et doit vous appartenir. Les IDs de résidence/véhicule seront déduits du booking si non fournis.'
+  })
   @ApiResponse({ status: 201, description: 'Avis créé avec succès' })
+  @ApiResponse({ status: 400, description: 'Données invalides, avis déjà existant pour cette réservation, ou item non disponible' })
+  @ApiResponse({ status: 403, description: 'Vous ne pouvez pas créer un avis pour une réservation qui ne vous appartient pas' })
+  @ApiResponse({ status: 404, description: 'Réservation, résidence ou véhicule non trouvé' })
   create(@Body() createReviewDto: CreateReviewDto, @Request() req) {
-    return this.reviewsService.create({
-      ...createReviewDto,
-      userId: req.user.id,
-    });
+    return this.reviewsService.create(createReviewDto, req.user.id);
   }
 
   @Get()

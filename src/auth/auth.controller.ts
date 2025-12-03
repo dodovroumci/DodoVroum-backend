@@ -1,9 +1,10 @@
-import { Controller, Post, Body, UseGuards, Request, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, UseGuards, Request, HttpCode, HttpStatus } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService, LoginResponse } from './auth.service';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { AuthThrottlerGuard } from './guards/auth-throttler.guard';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -49,10 +50,32 @@ export class AuthController {
     return this.authService.refreshToken(refreshTokenDto.refresh_token);
   }
 
+  @Get('validate')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Valider le token d\'authentification' })
+  @ApiResponse({ status: 200, description: 'Token valide' })
+  @ApiResponse({ status: 401, description: 'Token invalide ou expiré' })
+  async validate(@Request() req): Promise<{ valid: boolean; user: any }> {
+    return {
+      valid: true,
+      user: {
+        id: req.user.id,
+        email: req.user.email,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        role: req.user.role,
+      },
+    };
+  }
+
   @Post('logout')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Déconnexion utilisateur' })
   @ApiResponse({ status: 200, description: 'Déconnexion réussie' })
+  @ApiResponse({ status: 401, description: 'Non authentifié' })
   async logout(@Request() req): Promise<{ message: string }> {
     await this.authService.logout(req.user.id);
     return { message: 'Déconnexion réussie' };

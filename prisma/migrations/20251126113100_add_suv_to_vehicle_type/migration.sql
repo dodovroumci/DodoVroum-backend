@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `vehicles` MODIFY `type` ENUM('CAR', 'SUV', 'MOTORCYCLE', 'BICYCLE', 'SCOOTER', 'VAN', 'TRUCK') NOT NULL;

@@ -1,21 +1,11 @@
 import { Module } from '@nestjs/common';
-import { PrometheusModule } from '@nestjs/prometheus';
-import { HealthModule } from './health/health.module';
-import { MetricsModule } from './metrics/metrics.module';
+import { MonitoringInterceptor } from './interceptors/monitoring.interceptor';
+import { MetricsService } from './metrics/metrics.service';
+import { MetricsController } from './metrics/metrics.controller';
 
 @Module({
-  imports: [
-    PrometheusModule.register({
-      defaultMetrics: {
-        enabled: true,
-        config: {
-          prefix: 'dodovroum_',
-        },
-      },
-      path: '/metrics',
-    }),
-    HealthModule,
-    MetricsModule,
-  ],
+  controllers: [MetricsController],
+  providers: [MonitoringInterceptor, MetricsService],
+  exports: [MonitoringInterceptor, MetricsService],
 })
 export class MonitoringModule {}

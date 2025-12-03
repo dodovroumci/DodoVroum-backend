@@ -18,7 +18,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
+    if (!payload || !payload.sub) {
+      throw new Error('Token invalide: payload manquant');
+    }
+
     const user = await this.usersService.findById(payload.sub);
+    if (!user) {
+      throw new Error('Utilisateur non trouvé');
+    }
+
+    if (!user.isActive) {
+      throw new Error('Utilisateur inactif');
+    }
+
     return user;
   }
 }

@@ -4,5 +4,6 @@
     "declaration": false,
     "removeComments": true
   },
-  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "test", "dist", "**/*spec.ts", "**/*.spec.ts"]
 }

@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '../common/prisma/prisma.service';
-import { CreateBookingDto } from './dto/create-booking.dto';
+import { PrismaService } from '../../common/prisma/prisma.service';
+import { CreateBookingDto } from '../dto/create-booking.dto';
 
 @Injectable()
 export class BookingValidationService {
@@ -33,15 +33,19 @@ export class BookingValidationService {
     const start = new Date(startDate);
     const end = new Date(endDate);
     const now = new Date();
+    
+    // Réinitialiser les heures pour comparer uniquement les dates (sans heures/minutes/secondes)
+    const startDateOnly = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     // Vérifier que les dates sont valides
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       throw new BadRequestException('Format de date invalide');
     }
 
-    // Vérifier que la date de début est dans le futur
-    if (start <= now) {
-      throw new BadRequestException('La date de début doit être dans le futur');
+    // Vérifier que la date de début est aujourd'hui ou dans le futur (on permet aujourd'hui)
+    if (startDateOnly < nowDateOnly) {
+      throw new BadRequestException('La date de début ne peut pas être dans le passé');
     }
 
     // Vérifier que la date de fin est après la date de début

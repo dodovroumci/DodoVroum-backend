@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { WinstonModule } from 'nest-winston';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import * as winston from 'winston';
+import { AppLoggerService } from './app-logger.service';
 
 @Module({
   imports: [
@@ -60,5 +61,7 @@ import * as winston from 'winston';
       inject: [ConfigService],
     }),
   ],
+  providers: [AppLoggerService],
+  exports: [AppLoggerService],
 })
 export class LoggingModule {}

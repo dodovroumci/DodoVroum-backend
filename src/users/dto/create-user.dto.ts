@@ -28,4 +28,19 @@ export class CreateUserDto {
   @IsOptional()
   @IsEnum(UserRole)
   role?: UserRole;
+
+  @ApiProperty({ example: 'https://example.com/avatar.jpg', required: false })
+  @IsOptional()
+  @IsString()
+  avatar?: string;
+
+  @ApiProperty({ example: 'Propriétaire individuel', required: false })
+  @IsOptional()
+  @IsString()
+  typeProprietaire?: string;
+
+  @ApiProperty({ example: 'Abidjan, Côte d\'Ivoire', required: false })
+  @IsOptional()
+  @IsString()
+  localisation?: string;
 }

@@ -1,176 +1,200 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
-// Modèle Utilisateur
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  firstName String
-  lastName  String
-  phone     String?
-  role      UserRole @default(CLIENT)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  bookings  Booking[]
-  reviews   Review[]
-  favorites Favorite[]
-  payments  Payment[]
+  id                   String                @id @default(cuid())
+  email                String                @unique
+  password             String
+  firstName            String
+  lastName             String
+  phone                String?
+  role                 UserRole              @default(CLIENT)
+  isActive             Boolean               @default(true)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  avatar               String?
+  isVerified           Boolean               @default(false)
+  localisation         String?
+  typeProprietaire     String?
+  bookings             Booking[]
+  favorites            Favorite[]
+  identityVerification IdentityVerification?
+  offers               Offer[]
+  payments             Payment[]
+  residences           Residence[]
+  reviews              Review[]
+  vehicles             Vehicle[]
+  notifications        Notification[]
 
   @@index([email])
   @@index([isActive])
+  @@index([role])
+  @@index([isVerified])
   @@map("users")
 }
 
-// Modèle Résidence
 model Residence {
-  id          String   @id @default(cuid())
-  title       String
-  description String
-  address     String
-  city        String
-  country     String
-  pricePerDay Float
-  capacity    Int
-  bedrooms    Int
-  bathrooms   Int
-  amenities   String[] // Array de strings pour les équipements
-  images      String[] // Array d'URLs d'images
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  bookings Booking[]
-  reviews  Review[]
-  offers   Offer[]
-  favorites Favorite[]
+  id            String     @id @default(cuid())
+  title         String
+  description   String
+  address       String
+  city          String
+  country       String
+  pricePerDay   Float
+  capacity      Int
+  bedrooms      Int
+  bathrooms     Int
+  amenities     String     @db.LongText
+  images        String     @db.LongText
+  isActive      Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  isVerified    Boolean    @default(false)
+  latitude      Float?
+  longitude     Float?
+  ownerId       String?
+  typeResidence String?
+  bookings      Booking[]
+  favorites     Favorite[]
+  offers        Offer[]
+  owner         User?      @relation(fields: [ownerId], references: [id])
+  reviews       Review[]
 
   @@index([city])
   @@index([pricePerDay])
   @@index([isActive])
+  @@index([isVerified])
   @@index([createdAt])
+  @@index([ownerId])
   @@map("residences")
 }
 
-// Modèle Véhicule
 model Vehicle {
-  id          String   @id @default(cuid())
-  brand       String
-  model       String
-  year        Int
-  type        VehicleType
-  pricePerDay Float
-  capacity    Int
-  fuelType    String
+  id           String      @id @default(cuid())
+  brand        String
+  model        String
+  year         Int
+  type         VehicleType
+  pricePerDay  Float
+  capacity     Int
+  fuelType     String
   transmission String
-  features    String[] // Array de strings pour les équipements
-  images      String[] // Array d'URLs d'images
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  bookings Booking[]
-  reviews  Review[]
-  offers   Offer[]
-  favorites Favorite[]
+  features     String      @db.LongText
+  images       String      @db.LongText
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  address      String?
+  color        String?
+  condition    String?
+  isVerified   Boolean     @default(false)
+  mileage      Int?
+  title        String?
+  ownerId      String?
+  plateNumber  String?
+  bookings     Booking[]
+  favorites    Favorite[]
+  offers       Offer[]
+  reviews      Review[]
+  owner        User?       @relation(fields: [ownerId], references: [id])
 
   @@index([brand])
   @@index([type])
   @@index([pricePerDay])
   @@index([isActive])
+  @@index([isVerified])
   @@index([createdAt])
+  @@index([ownerId])
   @@map("vehicles")
 }
 
-// Modèle Offre Combinée
 model Offer {
-  id          String   @id @default(cuid())
+  id          String     @id @default(cuid())
   title       String
-  description String
+  description String?
   price       Float
-  discount    Float?   // Pourcentage de réduction
-  isActive    Boolean  @default(true)
+  discount    Float?
+  isActive    Boolean    @default(true)
   validFrom   DateTime
   validTo     DateTime
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
   residenceId String
-  residence   Residence @relation(fields: [residenceId], references: [id])
   vehicleId   String
-  vehicle     Vehicle   @relation(fields: [vehicleId], references: [id])
+  imageUrl    String?
+  isVerified  Boolean    @default(false)
+  nbJours     Int
+  ownerId     String?
   bookings    Booking[]
+  favorites   Favorite[]
+  owner       User?      @relation(fields: [ownerId], references: [id])
+  residence   Residence  @relation(fields: [residenceId], references: [id])
+  vehicle     Vehicle    @relation(fields: [vehicleId], references: [id])
 
   @@index([isActive])
+  @@index([isVerified])
   @@index([validFrom])
   @@index([validTo])
   @@index([price])
+  @@index([ownerId])
+  @@index([residenceId], map: "offers_residenceId_fkey")
+  @@index([vehicleId], map: "offers_vehicleId_fkey")
   @@map("offers")
 }
 
-// Modèle Réservation
 model Booking {
-  id          String        @id @default(cuid())
-  startDate   DateTime
-  endDate     DateTime
-  totalPrice  Float
-  status      BookingStatus @default(PENDING)
-  notes       String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id               String        @id @default(cuid())
+  startDate        DateTime
+  endDate          DateTime
+  totalPrice       Float
+  status           BookingStatus @default(PENDING)
+  notes            String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  userId           String
+  residenceId      String?
+  vehicleId        String?
+  offerId          String?
+  keyRetrievedAt   DateTime?
+  ownerConfirmedAt DateTime?
+  checkOutAt       DateTime?
+  offer            Offer?        @relation(fields: [offerId], references: [id])
+  residence        Residence?    @relation(fields: [residenceId], references: [id])
+  user             User          @relation(fields: [userId], references: [id])
+  vehicle          Vehicle?      @relation(fields: [vehicleId], references: [id])
+  payments         Payment[]
+  reviews          Review[]
 
-  // Relations
-  userId      String
-  user        User        @relation(fields: [userId], references: [id])
-  residenceId String?
-  residence   Residence?  @relation(fields: [residenceId], references: [id])
-  vehicleId   String?
-  vehicle     Vehicle?    @relation(fields: [vehicleId], references: [id])
-  offerId     String?
-  offer       Offer?      @relation(fields: [offerId], references: [id])
-  payments    Payment[]
-  reviews     Review[]
-
-  // Contraintes d'intégrité
   @@index([userId])
   @@index([startDate])
   @@index([endDate])
   @@index([status])
   @@index([createdAt])
+  @@index([offerId], map: "bookings_offerId_fkey")
+  @@index([residenceId], map: "bookings_residenceId_fkey")
+  @@index([vehicleId], map: "bookings_vehicleId_fkey")
   @@map("bookings")
 }
 
-// Modèle Paiement
 model Payment {
-  id          String        @id @default(cuid())
-  amount      Float
-  currency    String        @default("EUR")
-  status      PaymentStatus @default(PENDING)
-  method      PaymentMethod
+  id            String        @id @default(cuid())
+  amount        Float
+  currency      String        @default("EUR")
+  status        PaymentStatus @default(PENDING)
+  method        PaymentMethod
   transactionId String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  // Relations
-  userId      String
-  user        User      @relation(fields: [userId], references: [id])
-  bookingId   String
-  booking     Booking   @relation(fields: [bookingId], references: [id])
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  userId        String
+  bookingId     String
+  booking       Booking       @relation(fields: [bookingId], references: [id])
+  user          User          @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([bookingId])
@@ -179,22 +203,19 @@ model Payment {
   @@map("payments")
 }
 
-// Modèle Avis
 model Review {
-  id          String   @id @default(cuid())
-  rating      Int      // 1-5 étoiles
+  id          String     @id @default(cuid())
+  rating      Int
   comment     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
   userId      String
-  user        User      @relation(fields: [userId], references: [id])
   bookingId   String
-  booking     Booking   @relation(fields: [bookingId], references: [id])
   residenceId String?
-  residence   Residence? @relation(fields: [residenceId], references: [id])
   vehicleId   String?
+  booking     Booking    @relation(fields: [bookingId], references: [id])
+  residence   Residence? @relation(fields: [residenceId], references: [id])
+  user        User       @relation(fields: [userId], references: [id])
   vehicle     Vehicle?   @relation(fields: [vehicleId], references: [id])
 
   @@index([userId])
@@ -206,34 +227,90 @@ model Review {
   @@map("reviews")
 }
 
-// Modèle Favoris
 model Favorite {
-  id          String   @id @default(cuid())
-  createdAt   DateTime @default(now())
-
-  // Relations
+  id          String     @id @default(cuid())
+  createdAt   DateTime   @default(now())
   userId      String
-  user        User      @relation(fields: [userId], references: [id])
   residenceId String?
-  residence   Residence? @relation(fields: [residenceId], references: [id])
   vehicleId   String?
+  offerId     String?
+  offer       Offer?     @relation(fields: [offerId], references: [id])
+  residence   Residence? @relation(fields: [residenceId], references: [id])
+  user        User       @relation(fields: [userId], references: [id])
   vehicle     Vehicle?   @relation(fields: [vehicleId], references: [id])
 
   @@unique([userId, residenceId])
   @@unique([userId, vehicleId])
+  @@unique([userId, offerId])
   @@index([userId])
   @@index([createdAt])
+  @@index([offerId], map: "favorites_offerId_fkey")
+  @@index([residenceId], map: "favorites_residenceId_fkey")
+  @@index([vehicleId], map: "favorites_vehicleId_fkey")
   @@map("favorites")
 }
 
-// Enums
+model IdentityVerification {
+  id                 String             @id @default(cuid())
+  userId             String             @unique
+  identityNumber     String?
+  identityType       IdentityType?
+  identityPhotoFront String?
+  identityPhotoBack  String?
+  identityPhotoExtra String?
+  verificationStatus VerificationStatus @default(PENDING)
+  verifiedAt         DateTime?
+  verifiedBy         String?
+  rejectionReason    String?
+  submittedAt        DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([verificationStatus])
+  @@index([submittedAt])
+  @@map("identity_verifications")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String   @db.LongText
+  type      NotificationType @default(INFO)
+  isRead    Boolean  @default(false)
+  bookingId String?
+  createdAt DateTime @default(now())
+  readAt    DateTime?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@index([bookingId])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+  BOOKING_APPROVED
+  BOOKING_REJECTED
+  BOOKING_CANCELLED
+  PAYMENT_RECEIVED
+}
+
 enum UserRole {
   ADMIN
   CLIENT
+  PROPRIETAIRE
 }
 
 enum VehicleType {
   CAR
+  SUV
   MOTORCYCLE
   BICYCLE
   SCOOTER
@@ -246,6 +323,11 @@ enum BookingStatus {
   CONFIRMED
   CANCELLED
   COMPLETED
+  CONFIRMEE
+  CHECKIN_CLIENT
+  CHECKIN_PROPRIO
+  EN_COURS_SEJOUR
+  TERMINEE
 }
 
 enum PaymentStatus {
@@ -260,4 +342,19 @@ enum PaymentMethod {
   BANK_TRANSFER
   CASH
   MOBILE_MONEY
+}
+
+enum IdentityType {
+  CNI
+  PASSPORT
+  PERMIT
+  DRIVER_LICENSE
+  OTHER
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  UNDER_REVIEW
 }
