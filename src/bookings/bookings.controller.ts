@@ -123,4 +123,18 @@ export class BookingsController {
   confirmCheckOut(@Param('id') id: string, @Request() req) {
     return this.bookingsService.confirmCheckOut(id, req.user.id);
   }
+
+  @Patch(':id/cancel')
+  @ApiOperation({
+    summary: 'Annuler une réservation (client)',
+    description:
+      'Permet au client d\'annuler sa réservation tant qu\'elle est en statut PENDING. ' +
+      'Si la réservation est déjà approuvée, l\'annulation est refusée et le client doit demander un changement de dates.',
+  })
+  @ApiResponse({ status: 200, description: 'Réservation annulée avec succès' })
+  @ApiResponse({ status: 400, description: 'Action non autorisée ou réservation déjà approuvée/annulée' })
+  @ApiResponse({ status: 404, description: 'Réservation non trouvée' })
+  cancel(@Param('id') id: string, @Request() req) {
+    return this.bookingsService.cancelByClient(id, req.user.id);
+  }
 }

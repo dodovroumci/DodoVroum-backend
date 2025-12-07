@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsOptional, IsDateString, IsEnum, Min } from 'class-validator';
-import { BookingStatus } from '@prisma/client';
+import { IsString, IsNumber, IsOptional, IsDateString, IsEnum, Min, ValidateIf, IsIn } from 'class-validator';
+import { BookingStatus, PaymentMethod } from '@prisma/client';
 
 export class CreateBookingDto {
   @ApiProperty({ example: '2024-06-01T00:00:00Z' })
@@ -55,4 +55,20 @@ export class CreateBookingDto {
   @IsOptional()
   @IsDateString()
   checkOutAt?: string;
+
+  @ApiProperty({ enum: ['DOWN_PAYMENT', 'FULL_PAYMENT'], required: false, default: 'FULL_PAYMENT' })
+  @IsOptional()
+  @IsIn(['DOWN_PAYMENT', 'FULL_PAYMENT'])
+  paymentOption?: 'DOWN_PAYMENT' | 'FULL_PAYMENT';
+
+  @ApiProperty({ example: 150, required: false, description: 'Montant payé lors de la réservation en cas d’acompte' })
+  @ValidateIf((o) => (o.paymentOption || 'FULL_PAYMENT') === 'DOWN_PAYMENT')
+  @IsNumber()
+  @Min(0)
+  downPaymentAmount?: number;
+
+  @ApiProperty({ enum: PaymentMethod, required: false, default: PaymentMethod.CARD })
+  @IsOptional()
+  @IsEnum(PaymentMethod)
+  paymentMethod?: PaymentMethod;
 }

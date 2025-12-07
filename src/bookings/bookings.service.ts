@@ -18,16 +18,41 @@ export class BookingsService {
     // Validation métier
     await this.bookingValidationService.validateBooking(createBookingDto);
 
+    const {
+      paymentOption,
+      downPaymentAmount,
+      paymentMethod,
+      ...bookingPayload
+    } = createBookingDto;
+
     // Calcul automatique du prix si non fourni
-    let totalPrice = createBookingDto.totalPrice;
+    let totalPrice = bookingPayload.totalPrice;
     if (!totalPrice) {
       totalPrice = await this.bookingValidationService.calculateTotalPrice(
-        createBookingDto.residenceId,
-        createBookingDto.vehicleId,
-        createBookingDto.offerId,
-        createBookingDto.startDate,
-        createBookingDto.endDate,
+        bookingPayload.residenceId,
+        bookingPayload.vehicleId,
+        bookingPayload.offerId,
+        bookingPayload.startDate,
+        bookingPayload.endDate,
       );
+    }
+
+    const normalizedPaymentOption: 'DOWN_PAYMENT' | 'FULL_PAYMENT' =
+      (paymentOption || 'FULL_PAYMENT') as 'DOWN_PAYMENT' | 'FULL_PAYMENT';
+    const normalizedPaymentMethod = paymentMethod || PaymentMethod.CARD;
+
+    let amountToCharge = totalPrice;
+    if (normalizedPaymentOption === 'DOWN_PAYMENT') {
+      if (downPaymentAmount === undefined) {
+        throw new BadRequestException('Veuillez renseigner le montant de l\'acompte.');
+      }
+      if (downPaymentAmount <= 0) {
+        throw new BadRequestException('Le montant de l\'acompte doit être supérieur à 0.');
+      }
+      if (downPaymentAmount >= totalPrice) {
+        throw new BadRequestException('Le montant de l\'acompte doit être inférieur au montant total.');
+      }
+      amountToCharge = downPaymentAmount;
     }
 
     // Créer la réservation et le paiement dans une transaction
@@ -35,13 +60,13 @@ export class BookingsService {
       // Créer la réservation
       const newBooking = await tx.booking.create({
         data: {
-          ...createBookingDto,
+          ...bookingPayload,
           userId, // injecté ici, pas dans le DTO
           totalPrice,
-          startDate: new Date(createBookingDto.startDate),
-          endDate: new Date(createBookingDto.endDate),
+          startDate: new Date(bookingPayload.startDate),
+          endDate: new Date(bookingPayload.endDate),
           // Forcer le statut à PENDING pour nécessiter une approbation
-          status: createBookingDto.status || 'PENDING',
+          status: bookingPayload.status || 'PENDING',
         } as Prisma.BookingUncheckedCreateInput,
         include: {
           user: {
@@ -61,10 +86,10 @@ export class BookingsService {
       // Créer automatiquement un paiement pour la réservation
       await tx.payment.create({
         data: {
-          amount: totalPrice,
+          amount: amountToCharge,
           currency: 'EUR',
           status: PaymentStatus.COMPLETED,
-          method: PaymentMethod.CARD, // Par défaut, on considère un paiement par carte
+          method: normalizedPaymentMethod,
           userId,
           bookingId: newBooking.id,
         },
@@ -99,8 +124,8 @@ export class BookingsService {
 
     // Envoyer une notification au client
     try {
-      const startDate = new Date(createBookingDto.startDate).toLocaleDateString('fr-FR');
-      const endDate = new Date(createBookingDto.endDate).toLocaleDateString('fr-FR');
+      const startDate = new Date(bookingPayload.startDate).toLocaleDateString('fr-FR');
+      const endDate = new Date(bookingPayload.endDate).toLocaleDateString('fr-FR');
       
       let title = 'Réservation créée avec succès ✅';
       let message = '';
@@ -346,9 +371,29 @@ export class BookingsService {
   async update(id: string, updateBookingDto: UpdateBookingDto) {
     await this.findOne(id);
 
+    // Normaliser les dates pour Prisma (qui attend des Date, pas des chaînes partielles)
+    const data: Prisma.BookingUpdateInput = {
+      ...updateBookingDto,
+      ...(updateBookingDto.startDate && {
+        startDate: new Date(updateBookingDto.startDate),
+      }),
+      ...(updateBookingDto.endDate && {
+        endDate: new Date(updateBookingDto.endDate),
+      }),
+      ...(updateBookingDto.keyRetrievedAt && {
+        keyRetrievedAt: new Date(updateBookingDto.keyRetrievedAt),
+      }),
+      ...(updateBookingDto.ownerConfirmedAt && {
+        ownerConfirmedAt: new Date(updateBookingDto.ownerConfirmedAt),
+      }),
+      ...(updateBookingDto.checkOutAt && {
+        checkOutAt: new Date(updateBookingDto.checkOutAt),
+      }),
+    };
+
     const updated = await this.prisma.booking.update({
       where: { id },
-      data: updateBookingDto,
+      data,
       include: {
         user: {
           select: {
@@ -395,6 +440,117 @@ export class BookingsService {
         where: { id },
       });
     });
+  }
+
+  /**
+   * Annulation d'une réservation par le client.
+   * Règle métier :
+   * - Le client ne peut annuler que ses propres réservations
+   * - L'annulation n'est possible que si la réservation est encore en statut PENDING
+   * - Si la réservation a déjà été approuvée par le propriétaire, on bloque l'annulation
+   *   et on renvoie un message expliquant qu'il ne peut que demander un changement de dates
+   */
+  async cancelByClient(id: string, userId: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        residence: true,
+        vehicle: true,
+        offer: true,
+        payments: true,
+        reviews: {
+          select: {
+            id: true,
+          },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Réservation non trouvée');
+    }
+
+    if (booking.userId !== userId) {
+      throw new BadRequestException('Vous ne pouvez annuler que vos propres réservations');
+    }
+
+    if (booking.status === 'CANCELLED') {
+      throw new BadRequestException({
+        message: 'Cette réservation est déjà annulée.',
+        code: 'BOOKING_ALREADY_CANCELLED',
+        status: 'cancelled',
+      });
+    }
+
+    if (booking.status !== 'PENDING') {
+      // La réservation a déjà été approuvée / est en cours / terminée
+      throw new BadRequestException({
+        message:
+          'Vous ne pouvez plus annuler cette réservation car elle a déjà été approuvée par le propriétaire. ' +
+          'Vous pouvez uniquement demander une modification des dates auprès du propriétaire.',
+        code: 'BOOKING_ALREADY_APPROVED',
+        status: booking.status,
+      });
+    }
+
+    const updated = await this.prisma.booking.update({
+      where: { id },
+      data: {
+        status: 'CANCELLED',
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        residence: true,
+        vehicle: true,
+        offer: true,
+        payments: true,
+        reviews: {
+          select: {
+            id: true,
+          },
+        },
+      },
+    });
+
+    // Envoyer une notification de réservation annulée au client
+    try {
+      let bookingTitle = 'Votre réservation';
+      if (updated.residence?.title) {
+        bookingTitle = updated.residence.title;
+      } else if (updated.vehicle?.brand && updated.vehicle?.model) {
+        bookingTitle = `${updated.vehicle.brand} ${updated.vehicle.model}`;
+      } else if (updated.offer?.title) {
+        bookingTitle = updated.offer.title;
+      }
+
+      await this.notificationsService.createNotification(
+        updated.userId,
+        'Réservation annulée ❌',
+        `Votre réservation pour "${bookingTitle}" a été annulée avec succès.`,
+        NotificationType.BOOKING_CANCELLED,
+        id,
+      );
+    } catch (error) {
+      // Ne pas faire échouer l'annulation si l'envoi de notification échoue
+      console.error("Erreur lors de l'envoi de la notification d'annulation:", error);
+    }
+
+    return this.formatBookingResponse(updated);
   }
 
   /**

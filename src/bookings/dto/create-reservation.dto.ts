@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsOptional, IsDateString, Min, ValidateIf } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsDateString, Min, ValidateIf, IsIn, IsEnum } from 'class-validator';
+import { PaymentMethod } from '@prisma/client';
 
 /**
  * DTO pour créer une réservation avec des noms de propriétés en français
@@ -23,6 +24,12 @@ export class CreateReservationDto {
   @IsString()
   offerId?: string;
 
+  // Identifiant de "package" (pour compatibilité mobile) - ignoré ou mappé côté service si nécessaire
+  @ApiProperty({ example: 'package-id-123', required: false, description: 'Identifiant de package (compatibilité frontend)' })
+  @IsOptional()
+  @IsString()
+  packageId?: string;
+
   @ApiProperty({ example: '2024-06-01T00:00:00Z', required: false })
   @ValidateIf((o) => !o.date_debut)
   @IsDateString()
@@ -43,6 +50,22 @@ export class CreateReservationDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiProperty({ example: 'DOWN_PAYMENT', required: false, enum: ['DOWN_PAYMENT', 'FULL_PAYMENT'] })
+  @IsOptional()
+  @IsIn(['DOWN_PAYMENT', 'FULL_PAYMENT'])
+  paymentOption?: 'DOWN_PAYMENT' | 'FULL_PAYMENT';
+
+  @ApiProperty({ example: 150, required: false, description: 'Montant payé lors de la réservation si acompte' })
+  @ValidateIf((o) => (o.paymentOption || o.option_paiement || 'FULL_PAYMENT') === 'DOWN_PAYMENT')
+  @IsNumber()
+  @Min(0)
+  downPaymentAmount?: number;
+
+  @ApiProperty({ enum: PaymentMethod, required: false })
+  @IsOptional()
+  @IsEnum(PaymentMethod)
+  paymentMethod?: PaymentMethod;
 
   // Format français (accepté en alternative)
   @ApiProperty({ example: 'residence-id-123', required: false, description: 'Format français (alternative)' })
@@ -65,6 +88,12 @@ export class CreateReservationDto {
   @IsString()
   offer_id?: string;
 
+  // Format français pour l'identifiant de package - accepté pour éviter l'erreur de validation
+  @ApiProperty({ example: 'package-id-123', required: false, description: 'Identifiant de package (format français, compatibilité frontend)' })
+  @IsOptional()
+  @IsString()
+  package_id?: string;
+
   @ApiProperty({ example: '2024-06-01T00:00:00Z', required: false, description: 'Format français (alternative)' })
   @ValidateIf((o) => !o.startDate)
   @IsDateString()
@@ -84,6 +113,23 @@ export class CreateReservationDto {
   @ApiProperty({ example: 2, required: false, description: 'Nombre de personnes (ignoré mais accepté)' })
   @IsOptional()
   @IsNumber()
+  @Min(0)
   nombre_personnes?: number; // Ignoré mais accepté pour éviter l'erreur
+
+  @ApiProperty({ example: 'DOWN_PAYMENT', required: false, description: 'Option de paiement (français)' })
+  @IsOptional()
+  @IsIn(['DOWN_PAYMENT', 'FULL_PAYMENT'])
+  option_paiement?: 'DOWN_PAYMENT' | 'FULL_PAYMENT';
+
+  @ApiProperty({ example: 150, required: false, description: 'Montant de l’acompte (français)' })
+  @ValidateIf((o) => (o.paymentOption || o.option_paiement || 'FULL_PAYMENT') === 'DOWN_PAYMENT')
+  @IsNumber()
+  @Min(0)
+  montant_acompte?: number;
+
+  @ApiProperty({ example: 'CARD', required: false, description: 'Méthode de paiement (français)' })
+  @IsOptional()
+  @IsEnum(PaymentMethod)
+  methode_paiement?: PaymentMethod;
 }
 

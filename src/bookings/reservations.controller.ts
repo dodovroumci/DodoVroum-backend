@@ -39,9 +39,32 @@ export class ReservationsController {
       bookingDto.offerId = dto.offerId || dto.offer_id;
     }
 
+    // Compatibilité "package": si le frontend envoie packageId / package_id,
+    // on le mappe sur offerId (un package correspond à une offre combinée).
+    if (!bookingDto.offerId && (dto.packageId || dto.package_id)) {
+      bookingDto.offerId = dto.packageId || dto.package_id;
+    }
+
     // Ajouter le prix si présent
     if (dto.totalPrice !== undefined || dto.prix_total !== undefined) {
       bookingDto.totalPrice = dto.totalPrice !== undefined ? dto.totalPrice : dto.prix_total;
+    }
+
+    // Option de paiement (acompte ou totalité)
+    const paymentOption = dto.paymentOption || dto.option_paiement;
+    if (paymentOption) {
+      bookingDto.paymentOption = paymentOption as 'DOWN_PAYMENT' | 'FULL_PAYMENT';
+    }
+
+    // Montant d'acompte si fourni
+    const downPaymentAmount = dto.downPaymentAmount ?? dto.montant_acompte;
+    if (downPaymentAmount !== undefined) {
+      bookingDto.downPaymentAmount = downPaymentAmount;
+    }
+
+    // Méthode de paiement choisie
+    if (dto.paymentMethod || dto.methode_paiement) {
+      bookingDto.paymentMethod = dto.paymentMethod || dto.methode_paiement;
     }
 
     // Ajouter les notes si présentes
@@ -72,6 +95,15 @@ export class ReservationsController {
   @ApiOperation({ summary: 'Créer une réservation d\'offre combinée' })
   @ApiResponse({ status: 201, description: 'Réservation créée avec succès' })
   createOfferBooking(@Body() createReservationDto: CreateReservationDto, @Request() req) {
+    const createBookingDto = this.transformReservationToBooking(createReservationDto);
+    return this.bookingsService.create(createBookingDto, req.user.id);
+  }
+
+  // Alias pour compatibilité avec le frontend mobile qui appelle /reservations/packages
+  @Post('packages')
+  @ApiOperation({ summary: 'Créer une réservation de package (alias offre combinée)' })
+  @ApiResponse({ status: 201, description: 'Réservation créée avec succès' })
+  createPackageBooking(@Body() createReservationDto: CreateReservationDto, @Request() req) {
     const createBookingDto = this.transformReservationToBooking(createReservationDto);
     return this.bookingsService.create(createBookingDto, req.user.id);
   }
@@ -264,6 +296,20 @@ export class ReservationsController {
   @ApiResponse({ status: 404, description: 'Réservation non trouvée' })
   confirmCheckOut(@Param('id') id: string, @Request() req) {
     return this.bookingsService.confirmCheckOut(id, req.user.id);
+  }
+
+  @Patch(':id/cancel')
+  @ApiOperation({
+    summary: 'Annuler une réservation (client)',
+    description:
+      'Permet au client d\'annuler sa réservation tant qu\'elle est en statut PENDING. ' +
+      'Si la réservation est déjà approuvée, l\'annulation est refusée et le client doit demander un changement de dates.',
+  })
+  @ApiResponse({ status: 200, description: 'Réservation annulée avec succès' })
+  @ApiResponse({ status: 400, description: 'Action non autorisée ou réservation déjà approuvée/annulée' })
+  @ApiResponse({ status: 404, description: 'Réservation non trouvée' })
+  cancel(@Param('id') id: string, @Request() req) {
+    return this.bookingsService.cancelByClient(id, req.user.id);
   }
 }
 
