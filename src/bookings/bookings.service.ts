@@ -162,13 +162,20 @@ export class BookingsService {
             })()
           : rest;
 
-      const hasPatchFields = Object.entries(patchBody).some(([, v]) => v !== undefined);
+      const {
+        paymentOption: _paymentOption,
+        downPaymentAmount: _downPaymentAmount,
+        paymentMethod: _paymentMethod,
+        ...bookingScalars
+      } = patchBody as UpdateBookingDto;
+
+      const hasPatchFields = Object.entries(bookingScalars).some(([, v]) => v !== undefined);
       if (!hasPatchFields) {
         return this.findOne(id);
       }
 
       const data: Prisma.BookingUpdateInput = {
-        ...patchBody,
+        ...bookingScalars,
       } as Prisma.BookingUpdateInput;
 
       const updated = await this.prisma.booking.update({
