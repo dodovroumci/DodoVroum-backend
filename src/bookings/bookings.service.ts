@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { BookingValidationService } from './services/booking-validation.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
+import { UpdateBookingDatesDto } from './dto/update-booking-dates.dto';
 import { Prisma, NotificationType, PaymentStatus, PaymentMethod, BookingStatus } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -70,20 +71,114 @@ export class BookingsService {
     return this.formatBookingResponse(fullBooking);
   }
 
-  async update(id: string, updateBookingDto: UpdateBookingDto) {
-    const data: Prisma.BookingUpdateInput = {
-      ...updateBookingDto,
-      ...(updateBookingDto.startDate && { startDate: new Date(updateBookingDto.startDate) }),
-      ...(updateBookingDto.endDate && { endDate: new Date(updateBookingDto.endDate) }),
-    };
+  private readonly rescheduleBlockedStatuses: BookingStatus[] = [
+    BookingStatus.CANCELLED,
+    BookingStatus.COMPLETED,
+    BookingStatus.TERMINEE,
+    BookingStatus.EN_COURS_SEJOUR,
+    BookingStatus.ONGOING,
+  ];
+
+  private assertRescheduleAllowed(booking: { status: BookingStatus; keyRetrievedAt: Date | null }) {
+    if (booking.keyRetrievedAt) {
+      throw new BadRequestException('La clé a déjà été récupérée : report impossible.');
+    }
+    if (this.rescheduleBlockedStatuses.includes(booking.status)) {
+      throw new BadRequestException('Cette réservation ne peut plus être reportée (statut actuel).');
+    }
+  }
+
+  /**
+   * Report ou modification des dates : disponibilité, statut, recalcul du totalPrice.
+   */
+  async updateBookingDates(id: string, dto: UpdateBookingDatesDto) {
+    const booking = await this.prisma.booking.findUnique({ where: { id } });
+    if (!booking) throw new NotFoundException('Réservation non trouvée');
+
+    this.assertRescheduleAllowed(booking);
+
+    await this.bookingValidationService.validateRescheduleDates(
+      {
+        id: booking.id,
+        residenceId: booking.residenceId,
+        vehicleId: booking.vehicleId,
+        offerId: booking.offerId,
+      },
+      dto.startDate,
+      dto.endDate,
+    );
+
+    const totalPrice = await this.bookingValidationService.calculateTotalPrice(
+      booking.residenceId ?? undefined,
+      booking.vehicleId ?? undefined,
+      booking.offerId ?? undefined,
+      dto.startDate,
+      dto.endDate,
+    );
 
     const updated = await this.prisma.booking.update({
       where: { id },
-      data,
+      data: {
+        startDate: new Date(dto.startDate),
+        endDate: new Date(dto.endDate),
+        totalPrice,
+      },
       include: this.getBookingInclude(),
     });
 
     return this.formatBookingResponse(updated);
+  }
+
+  async update(id: string, updateBookingDto: UpdateBookingDto) {
+    const { startDate, endDate, ...rest } = updateBookingDto;
+    const hasStart = startDate !== undefined;
+    const hasEnd = endDate !== undefined;
+
+    if (hasStart !== hasEnd) {
+      throw new BadRequestException('Pour modifier les dates, fournissez startDate et endDate ensemble.');
+    }
+
+    const hasRest = Object.entries(rest).some(([, v]) => v !== undefined);
+
+    if (!hasStart && !hasEnd && !hasRest) {
+      throw new BadRequestException('Aucun champ à mettre à jour.');
+    }
+
+    if (hasStart && hasEnd) {
+      if (!hasRest) {
+        return this.updateBookingDates(id, { startDate: startDate!, endDate: endDate! });
+      }
+      await this.updateBookingDates(id, { startDate: startDate!, endDate: endDate! });
+    }
+
+    if (hasRest) {
+      const patchBody =
+        hasStart && hasEnd
+          ? (() => {
+              const { totalPrice: _ignored, ...withoutPrice } = rest as UpdateBookingDto & {
+                totalPrice?: number;
+              };
+              return withoutPrice;
+            })()
+          : rest;
+
+      const hasPatchFields = Object.entries(patchBody).some(([, v]) => v !== undefined);
+      if (!hasPatchFields) {
+        return this.findOne(id);
+      }
+
+      const data: Prisma.BookingUpdateInput = {
+        ...patchBody,
+      } as Prisma.BookingUpdateInput;
+
+      const updated = await this.prisma.booking.update({
+        where: { id },
+        data,
+        include: this.getBookingInclude(),
+      });
+
+      return this.formatBookingResponse(updated);
+    }
   }
 
   async remove(id: string) {

@@ -18,6 +18,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { BookingsService } from './bookings.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
+import { UpdateBookingDatesDto } from './dto/update-booking-dates.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BookingOwnerOrAdminGuard } from './guards/booking-owner-or-admin.guard';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -144,6 +145,12 @@ export class ReservationsController {
   @ApiOperation({ summary: 'Obtenir une réservation par ID' })
   findOne(@Param('id') id: string) {
     return this.bookingsService.findOne(id);
+  }
+
+  @Patch(':id/dates')
+  @ApiOperation({ summary: 'Reporter ou modifier les dates (validation disponibilité + prix)' })
+  updateDates(@Param('id') id: string, @Body() dto: UpdateBookingDatesDto) {
+    return this.bookingsService.updateBookingDates(id, dto);
   }
 
   @Patch(':id')

@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
+import { UpdateBookingDatesDto } from './dto/update-booking-dates.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BookingOwnerOrAdminGuard } from './guards/booking-owner-or-admin.guard';
 
@@ -47,6 +48,20 @@ export class BookingsController {
   @ApiResponse({ status: 404, description: 'Réservation non trouvée' })
   findOne(@Param('id') id: string) {
     return this.bookingsService.findOne(id);
+  }
+
+  @Patch(':id/dates')
+  @ApiOperation({
+    summary: 'Reporter ou modifier les dates d\'une réservation',
+    description:
+      'Vérifie la disponibilité (hors cette réservation), le statut (pas après clé / séjour / annulation) et recalcule le prix total.',
+  })
+  @ApiResponse({ status: 200, description: 'Dates mises à jour' })
+  @ApiResponse({ status: 400, description: 'Report impossible ou dates invalides' })
+  @ApiResponse({ status: 404, description: 'Réservation non trouvée' })
+  @ApiResponse({ status: 409, description: 'Créneau déjà occupé ou bloqué' })
+  updateDates(@Param('id') id: string, @Body() dto: UpdateBookingDatesDto) {
+    return this.bookingsService.updateBookingDates(id, dto);
   }
 
   @Patch(':id')

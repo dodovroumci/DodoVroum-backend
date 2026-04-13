@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateBookingDto } from '../dto/create-booking.dto';
 
@@ -83,10 +83,51 @@ export class BookingValidationService {
     }
   }
 
+  /** Statuts considérés comme une occupation réelle pour les chevauchements. */
+  private static readonly OVERLAP_BOOKING_STATUSES = [
+    'PENDING',
+    'CONFIRMED',
+    'CONFIRMEE',
+    'CHECKIN_CLIENT',
+    'CHECKIN_PROPRIO',
+    'EN_COURS_SEJOUR',
+  ] as const;
+
+  async validateRescheduleDates(
+    booking: {
+      id: string;
+      residenceId: string | null;
+      vehicleId: string | null;
+      offerId: string | null;
+    },
+    startDate: string,
+    endDate: string,
+  ): Promise<void> {
+    await this.validateDates(startDate, endDate);
+
+    const { residenceId, vehicleId, offerId } = booking;
+    const hasResidence = !!residenceId;
+    const hasVehicle = !!vehicleId;
+    const hasOffer = !!offerId;
+    const serviceCount = [hasResidence, hasVehicle, hasOffer].filter(Boolean).length;
+    if (serviceCount !== 1) {
+      throw new BadRequestException('Réservation invalide : un seul service attendu');
+    }
+
+    if (offerId) {
+      await this.validateOfferAvailability(offerId, startDate, endDate, booking.id);
+    } else if (residenceId) {
+      await this.validateResidenceAvailability(residenceId, startDate, endDate, booking.id);
+    } else if (vehicleId) {
+      await this.validateVehicleAvailability(vehicleId, startDate, endDate, booking.id);
+    }
+  }
+
   private async validateResidenceAvailability(
     residenceId: string,
     startDate: string,
     endDate: string,
+    excludeBookingId?: string,
   ): Promise<void> {
     const residence = await this.prisma.residence.findUnique({
       where: { id: residenceId },
@@ -104,8 +145,9 @@ export class BookingValidationService {
     const conflictingBooking = await this.prisma.booking.findFirst({
       where: {
         residenceId,
+        ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
         status: {
-          in: ['PENDING', 'CONFIRMED', 'CONFIRMEE', 'CHECKIN_CLIENT', 'CHECKIN_PROPRIO', 'EN_COURS_SEJOUR'],
+          in: [...BookingValidationService.OVERLAP_BOOKING_STATUSES],
         },
         OR: [
           {
@@ -131,6 +173,9 @@ export class BookingValidationService {
     });
 
     if (conflictingBooking) {
+      if (excludeBookingId) {
+        throw new ConflictException('Ces dates sont déjà occupées.');
+      }
       throw new BadRequestException('Cette résidence n\'est pas disponible pour les dates sélectionnées');
     }
 
@@ -163,6 +208,9 @@ export class BookingValidationService {
       });
 
       if (blockedDate) {
+        if (excludeBookingId) {
+          throw new ConflictException('Ces dates sont bloquées pour ce logement.');
+        }
         throw new BadRequestException('Cette résidence est bloquée pour les dates sélectionnées');
       }
     }
@@ -172,6 +220,7 @@ export class BookingValidationService {
     vehicleId: string,
     startDate: string,
     endDate: string,
+    excludeBookingId?: string,
   ): Promise<void> {
     // Vérifier que le client Prisma a été régénéré et vérifier les dates bloquées
     if (this.prisma.blockedDate) {
@@ -202,6 +251,9 @@ export class BookingValidationService {
       });
 
       if (blockedDate) {
+        if (excludeBookingId) {
+          throw new ConflictException('Ces dates sont bloquées pour ce véhicule.');
+        }
         throw new BadRequestException('Ce véhicule est bloqué pour les dates sélectionnées');
       }
     }
@@ -221,8 +273,9 @@ export class BookingValidationService {
     const conflictingBooking = await this.prisma.booking.findFirst({
       where: {
         vehicleId,
+        ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
         status: {
-          in: ['PENDING', 'CONFIRMED'],
+          in: [...BookingValidationService.OVERLAP_BOOKING_STATUSES],
         },
         OR: [
           {
@@ -248,6 +301,9 @@ export class BookingValidationService {
     });
 
     if (conflictingBooking) {
+      if (excludeBookingId) {
+        throw new ConflictException('Ces dates sont déjà occupées.');
+      }
       throw new BadRequestException('Ce véhicule n\'est pas disponible pour les dates sélectionnées');
     }
   }
@@ -256,6 +312,7 @@ export class BookingValidationService {
     offerId: string,
     startDate: string,
     endDate: string,
+    excludeBookingId?: string,
   ): Promise<void> {
     const offer = await this.prisma.offer.findUnique({
       where: { id: offerId },
@@ -279,8 +336,8 @@ export class BookingValidationService {
     }
 
     // Vérifier la disponibilité de la résidence et du véhicule
-    await this.validateResidenceAvailability(offer.residenceId, startDate, endDate);
-    await this.validateVehicleAvailability(offer.vehicleId, startDate, endDate);
+    await this.validateResidenceAvailability(offer.residenceId, startDate, endDate, excludeBookingId);
+    await this.validateVehicleAvailability(offer.vehicleId, startDate, endDate, excludeBookingId);
   }
 
   async calculateTotalPrice(
