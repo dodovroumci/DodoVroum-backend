@@ -8,7 +8,8 @@ import {
   Delete,
   UseGuards,
   Request,
-  Query
+  Query,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -23,7 +24,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { IdentityVerificationService } from '../identity-verification/identity-verification.service';
 import { UpdateVerificationStatusDto } from '../identity-verification/dto/update-verification-status.dto';
-import { VerificationStatus } from '@prisma/client';
+import { UserRole, VerificationStatus } from '@prisma/client';
 
 @ApiTags('users')
 @Controller('users')
@@ -63,14 +64,47 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(id, updateUserDto);
+  @ApiOperation({
+    summary: 'Mettre à jour un utilisateur',
+    description:
+      'Un utilisateur connecté ne peut modifier que son propre profil. Les administrateurs peuvent modifier n’importe quel compte.',
+  })
+  @ApiResponse({ status: 403, description: 'Interdit : ce n’est pas votre compte' })
+  async update(
+    @Param('id') id: string,
+    @Body() updateUserDto: UpdateUserDto,
+    @Request() req: { user: { id: string; role: UserRole } },
+  ) {
+    if (req.user.id !== id && req.user.role !== UserRole.ADMIN) {
+      throw new ForbiddenException("Vous n'avez pas l'autorisation de modifier ce profil.");
+    }
+
+    const payload = { ...updateUserDto };
+    if (req.user.role !== UserRole.ADMIN) {
+      delete (payload as Partial<UpdateUserDto>).role;
+      delete (payload as Partial<UpdateUserDto>).isVerified;
+      delete (payload as Partial<UpdateUserDto>).isActive;
+    }
+
+    return this.usersService.update(id, payload);
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  @ApiOperation({
+    summary: 'Supprimer un utilisateur',
+    description:
+      'Un utilisateur ne peut supprimer que son propre compte. Les administrateurs peuvent supprimer n’importe quel compte.',
+  })
+  @ApiResponse({ status: 403, description: 'Interdit : vous ne pouvez supprimer que votre propre compte' })
+  async remove(
+    @Param('id') id: string,
+    @Request() req: { user: { id: string; role: UserRole } },
+  ) {
+    if (req.user.id !== id && req.user.role !== UserRole.ADMIN) {
+      throw new ForbiddenException("Vous n'êtes pas autorisé à supprimer ce compte.");
+    }
     return this.usersService.remove(id);
   }
 
