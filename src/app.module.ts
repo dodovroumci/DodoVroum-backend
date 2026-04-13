@@ -1,66 +1,56 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule'; // ✅ Nouvel import
 import { PrismaModule } from './common/prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { SecurityModule } from './security/security.module';
+import { AppController } from './app.controller';
+
+// Nouveaux imports métier
 import { ResidencesModule } from './residences/residences.module';
 import { VehiclesModule } from './vehicles/vehicles.module';
-import { OffersModule } from './offers/offers.module';
 import { BookingsModule } from './bookings/bookings.module';
-import { PaymentsModule } from './payments/payments.module';
-import { ReviewsModule } from './reviews/reviews.module';
-import { FavoritesModule } from './favorites/favorites.module';
-import { SearchModule } from './search/search.module';
-import { IdentityVerificationModule } from './identity-verification/identity-verification.module';
+import { OffersModule } from './offers/offers.module';
 import { UploadModule } from './upload/upload.module';
-import { AdminModule } from './admin/admin.module';
-import { MonitoringModule } from './monitoring/monitoring.module';
-import { CacheConfigModule } from './cache/cache.module';
-import { LoggingModule } from './logging/logging.module';
-import { SecurityModule } from './security/security.module';
-import { NotificationsModule } from './notifications/notifications.module';
+import { FavoritesModule } from './favorites/favorites.module';
+import { ReviewsModule } from './reviews/reviews.module';
 
+/**
+ * @description Expert Fullstack - Point d'entrée de l'architecture NestJS
+ * Centralise les modules globaux, la sécurité et le métier.
+ */
 @Module({
   imports: [
-    // Configuration globale
+    // --- 1. CONFIGURATION & SÉCURITÉ ---
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
     }),
-    
-    // Rate limiting
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000, // 1 minute
-        limit: 100, // 100 requêtes par minute
-      },
-    ]),
-    
-    // Modules de monitoring et sécurité
-    MonitoringModule,
-    CacheConfigModule,
-    LoggingModule,
-    SecurityModule,
-    
-    // Base de données
+    // ✅ Activation du scheduler pour les tâches automatisées (Expirations, etc.)
+    ScheduleModule.forRoot(), 
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 100,
+    }]),
     PrismaModule,
-    
-    // Modules métier
+
+    // --- 2. CORE & AUTH ---
     AuthModule,
     UsersModule,
+    SecurityModule,
+
+    // --- 3. MÉTIER & SERVICES ---
     ResidencesModule,
     VehiclesModule,
-    OffersModule,
     BookingsModule,
-    PaymentsModule,
-    ReviewsModule,
-    FavoritesModule,
-    SearchModule,
-    IdentityVerificationModule,
+    OffersModule,
     UploadModule,
-    AdminModule,
-    NotificationsModule,
+    FavoritesModule,
+    ReviewsModule,
   ],
+  controllers: [AppController],
+  providers: [],
 })
 export class AppModule {}

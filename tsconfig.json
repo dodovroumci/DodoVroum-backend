@@ -5,12 +5,12 @@
     "removeComments": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
+    "useDefineForClassFields": false,
     "allowSyntheticDefaultImports": true,
-    "target": "ES2020",
+    "target": "ES2021",
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "./src",
-    "baseUrl": "./",
+    "baseUrl": "./", 
     "incremental": true,
     "skipLibCheck": true,
     "strictNullChecks": false,
@@ -19,19 +19,9 @@
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": false,
     "paths": {
-      "@/*": ["src/*"],
-      "@/common/*": ["src/common/*"],
-      "@/auth/*": ["src/auth/*"],
-      "@/users/*": ["src/users/*"],
-      "@/residences/*": ["src/residences/*"],
-      "@/vehicles/*": ["src/vehicles/*"],
-      "@/offers/*": ["src/offers/*"],
-      "@/bookings/*": ["src/bookings/*"],
-      "@/payments/*": ["src/payments/*"],
-      "@/reviews/*": ["src/reviews/*"],
-      "@/favorites/*": ["src/favorites/*"]
+      "@/*": ["src/*"]
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "prisma", "test"]
+  "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
 }

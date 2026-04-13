@@ -98,8 +98,8 @@ export class TestUtils {
         capacity: 4,
         bedrooms: 2,
         bathrooms: 1,
-        amenities: ['WiFi', 'Parking'],
-        images: ['test-image.jpg'],
+        amenities: JSON.stringify(['WiFi', 'Parking']),
+        images: JSON.stringify(['test-image.jpg']),
       },
     });
 
@@ -114,8 +114,8 @@ export class TestUtils {
         capacity: 5,
         fuelType: 'Essence',
         transmission: 'Automatique',
-        features: ['GPS', 'Climatisation'],
-        images: ['test-car.jpg'],
+        features: JSON.stringify(['GPS', 'Climatisation']),
+        images: JSON.stringify(['test-car.jpg']),
       },
     });
 

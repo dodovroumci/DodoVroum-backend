@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@ne
 import { OffersService } from './offers.service';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { UpdateOfferDto } from './dto/update-offer.dto';
+import { OffersQueryDto } from './dto/offers-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OfferOwnerGuard } from './guards/offer-owner.guard';
 
@@ -31,10 +32,20 @@ export class OffersController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Obtenir toutes les offres' })
+  @ApiOperation({ summary: 'Obtenir toutes les offres avec filtres optionnels' })
   @ApiResponse({ status: 200, description: 'Liste des offres' })
-  findAll() {
-    return this.offersService.findAll();
+  findAll(@Query() query: OffersQueryDto) {
+    // Normaliser owner_id vers proprietaireId si nécessaire
+    const normalizedQuery = { ...query };
+    if (normalizedQuery.owner_id && !normalizedQuery.proprietaireId) {
+      normalizedQuery.proprietaireId = normalizedQuery.owner_id;
+      delete normalizedQuery.owner_id;
+    }
+    const { proprietaireId, owner_id, ...paginationOptions } = normalizedQuery;
+    return this.offersService.findAll({ 
+      proprietaireId, 
+      ...paginationOptions 
+    });
   }
 
   @Get('my-offers')

@@ -1,532 +1,213 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  InternalServerErrorException,
+  ForbiddenException
+} from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { VehiclesQueryDto } from './dto/vehicles-query.dto';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
-import { UpdateVehicleDto } from './dto/update-vehicle.dto';
-import { VehicleType } from '@prisma/client';
+import { VehicleType, Prisma } from '@prisma/client';
 
 @Injectable()
 export class VehiclesService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(VehiclesService.name);
 
-  /**
-   * Transforme le DTO pour convertir les propriétés alternatives
-   */
-  private transformVehicleDto(dto: CreateVehicleDto | UpdateVehicleDto): any {
-    const transformed: any = { ...dto };
+  constructor(private readonly prisma: PrismaService) {}
 
-    // Supprimer proprietaireId s'il est présent (ignoré car assigné automatiquement)
-    if ('proprietaireId' in transformed) {
-      delete transformed.proprietaireId;
-    }
+  // --- RESTAURÉ : UTILISÉ PAR LES GUARDS ET CONTROLLERS ---
 
-    // Convertir name en title si présent
-    if ('name' in transformed && transformed.name !== undefined) {
-      transformed.title = transformed.title || transformed.name;
-      delete transformed.name;
-    }
+  async isOwner(vehicleId: string, userId: string): Promise<boolean> {
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { id: vehicleId },
+      select: { ownerId: true }
+    });
+    return vehicle?.ownerId === userId;
+  }
 
-    // Convertir seats en capacity si présent
-    if ('seats' in transformed && transformed.seats !== undefined) {
-      transformed.capacity = transformed.capacity || transformed.seats;
-      delete transformed.seats;
-    }
+  async findAllTypes() {
+    return [
+      { id: 'citadine', label: 'Citadine', icon: '🚗' },
+      { id: 'berline', label: 'Berline', icon: '🚘' },
+      { id: 'suv', label: 'SUV', icon: '🚙' },
+      { id: 'utilitaire', label: 'Utilitaire', icon: '🚚' },
+      { id: 'luxe', label: 'Luxe', icon: '🏎️' },
+    ];
+  }
 
-    // Convertir fuel en fuelType si présent
-    if ('fuel' in transformed && transformed.fuel !== undefined) {
-      transformed.fuelType = transformed.fuelType || transformed.fuel;
-      delete transformed.fuel;
-    }
+  async getVehicleTypes() {
+    return this.findAllTypes();
+  }
 
-    // Normaliser le type si c'est une string (convertir en majuscules et mapper)
-    if ('type' in transformed && transformed.type) {
-      if (typeof transformed.type === 'string') {
-        const upperType = transformed.type.toUpperCase();
-        // Mapper les valeurs courantes
-        const typeMap: Record<string, VehicleType> = {
-          'CAR': VehicleType.CAR,
-          'VOITURE': VehicleType.CAR,
-          'SUV': VehicleType.SUV,
-          'MOTORCYCLE': VehicleType.MOTORCYCLE,
-          'MOTO': VehicleType.MOTORCYCLE,
-          'BICYCLE': VehicleType.BICYCLE,
-          'VELO': VehicleType.BICYCLE,
-          'SCOOTER': VehicleType.SCOOTER,
-          'VAN': VehicleType.VAN,
-          'TRUCK': VehicleType.TRUCK,
-          'CAMION': VehicleType.TRUCK,
-        };
-        const mappedValue = typeMap[upperType];
-        if (mappedValue) {
-          transformed.type = mappedValue;
-        } else if (Object.values(VehicleType).includes(upperType as VehicleType)) {
-          transformed.type = upperType as VehicleType;
-        } else {
-          // Si le type n'est pas reconnu, supprimer le champ pour éviter une erreur Prisma
-          delete transformed.type;
-        }
-      } else if (!Object.values(VehicleType).includes(transformed.type as VehicleType)) {
-        // Si ce n'est pas une string et pas un enum valide, supprimer
-        delete transformed.type;
+  // --- MAPPING & NORMALISATION ---
+
+  private transformVehicleData(data: any): any {
+    const transformed = { ...data };
+    const mapping: Record<string, string> = {
+      proprietaireId: 'ownerId',
+      prixParJour: 'pricePerDay',
+      immatriculation: 'licensePlate',
+      places: 'seats',
+      carburant: 'fuelType',
+      boite: 'transmission'
+    };
+
+    Object.keys(mapping).forEach(oldKey => {
+      if (transformed[oldKey] !== undefined) {
+        transformed[mapping[oldKey]] = transformed[oldKey];
+        delete transformed[oldKey];
       }
-    }
-
-    // Ignorer description (non stocké en base)
-    delete transformed.description;
-
-    // Convertir images en JSON string si c'est un tableau
-    if ('images' in transformed && Array.isArray(transformed.images)) {
-      transformed.images = JSON.stringify(transformed.images);
-    }
-
-    // Convertir features en JSON string si c'est un tableau
-    if ('features' in transformed && Array.isArray(transformed.features)) {
-      transformed.features = JSON.stringify(transformed.features);
-    }
+    });
 
     return transformed;
   }
 
-  async create(createVehicleDto: CreateVehicleDto, ownerId?: string) {
-    const transformedData = this.transformVehicleDto(createVehicleDto);
-    
-    // Assigner automatiquement le propriétaire si fourni
-    if (ownerId) {
-      transformedData.ownerId = ownerId;
-    }
-    
-    // Si le type n'est pas fourni, utiliser CAR par défaut
-    if (!transformedData.type) {
-      transformedData.type = VehicleType.CAR;
-    }
-    
-    const created = await this.prisma.vehicle.create({
-      data: transformedData,
-      include: {
-        owner: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-          },
-        },
-        reviews: {
-          select: {
-            rating: true,
-          },
-        },
-        _count: {
-          select: {
-            bookings: true,
-          },
-        },
-      },
-    });
-
-    return this.formatVehicleResponse(created);
+  private normalizeVehicleType(type: any): VehicleType {
+    const t = String(type).toUpperCase();
+    const mapping: Record<string, VehicleType> = {
+      'BERLINE': VehicleType.CAR, 'CAR': VehicleType.CAR, 'CITADINE': VehicleType.CAR,
+      'SUV': VehicleType.SUV, '4X4': VehicleType.SUV, 'MOTO': VehicleType.MOTORCYCLE,
+      'MOTORCYCLE': VehicleType.MOTORCYCLE, 'VAN': VehicleType.VAN, 'UTILITAIRE': VehicleType.TRUCK, 'TRUCK': VehicleType.TRUCK
+    };
+    return mapping[t] || VehicleType.CAR;
   }
 
-  async findAll() {
+  // --- WRITE METHODS ---
+
+  async create(dto: CreateVehicleDto, user: any) {
+    const cleanData = this.transformVehicleData(dto);
+    const targetOwnerId = (user.role?.toLowerCase() === 'admin' && cleanData.ownerId) 
+      ? cleanData.ownerId 
+      : user.id;
+
+    try {
+      const vehicle = await this.prisma.vehicle.create({
+        data: {
+          brand: cleanData.brand,
+          model: cleanData.model,
+          title: cleanData.title || null,
+          description: cleanData.description || null,
+          type: this.normalizeVehicleType(cleanData.type),
+          pricePerDay: parseFloat((cleanData.pricePerDay || 0).toString()),
+          plateNumber: cleanData.licensePlate || cleanData.plateNumber || 'NON-RENSEIGNE',
+          year: parseInt((cleanData.year || new Date().getFullYear()).toString()),
+          capacity: parseInt((cleanData.seats || cleanData.capacity || "5").toString()),
+          isActive: true,
+          fuelType: cleanData.fuelType || cleanData.fuel || "Essence",
+          transmission: cleanData.transmission || "Manuelle",
+          color: cleanData.color || null,
+          mileage: cleanData.mileage ? parseInt(cleanData.mileage.toString()) : null,
+          features: JSON.stringify(cleanData.features || []),
+          images: JSON.stringify(cleanData.images || []),
+          owner: { connect: { id: String(targetOwnerId) } }
+        }
+      });
+      return this.enrichVehicleResponse(vehicle);
+    } catch (error) {
+      this.logger.error(`[CREATE_ERROR] ${error.message}`);
+      throw new InternalServerErrorException("Erreur lors de la création.");
+    }
+  }
+
+  async update(id: string, data: any, user: any) {
+    const vehicle = await this.prisma.vehicle.findUnique({ where: { id } });
+    if (!vehicle) throw new NotFoundException("Véhicule introuvable.");
+
+    const isAdmin = user.role?.toLowerCase() === 'admin' || user.role === 'ADMIN';
+    if (!isAdmin && vehicle.ownerId !== user.id) throw new ForbiddenException("Accès refusé.");
+
+    const cleanData = this.transformVehicleData(data);
+    const updateData: any = {};
+    
+    const directFields = ['brand', 'model', 'description', 'color', 'transmission', 'title'];
+    directFields.forEach(f => { if (cleanData[f] !== undefined) updateData[f] = cleanData[f]; });
+
+    if (cleanData.fuelType) updateData.fuelType = cleanData.fuelType;
+    if (cleanData.licensePlate || cleanData.plateNumber) updateData.plateNumber = cleanData.licensePlate || cleanData.plateNumber;
+    if (cleanData.pricePerDay !== undefined) updateData.pricePerDay = parseFloat(cleanData.pricePerDay.toString());
+    if (cleanData.year !== undefined) updateData.year = parseInt(cleanData.year.toString());
+    if (cleanData.seats || cleanData.capacity) updateData.capacity = parseInt((cleanData.seats || cleanData.capacity).toString());
+    if (cleanData.mileage !== undefined) updateData.mileage = cleanData.mileage ? parseInt(cleanData.mileage.toString()) : null;
+    if (cleanData.isActive !== undefined) updateData.isActive = (String(cleanData.isActive) === 'true' || cleanData.isActive === true);
+    if (cleanData.features) updateData.features = JSON.stringify(cleanData.features);
+    if (cleanData.images) updateData.images = JSON.stringify(cleanData.images);
+    if (cleanData.type) updateData.type = this.normalizeVehicleType(cleanData.type);
+
+    try {
+      const updated = await this.prisma.vehicle.update({ where: { id }, data: updateData });
+      return this.enrichVehicleResponse(updated);
+    } catch (error) {
+      throw new BadRequestException("Échec de la mise à jour.");
+    }
+  }
+
+  // --- READ METHODS ---
+
+  private enrichVehicleResponse(vehicle: any) {
+    const hasCustomTitle = vehicle.title && vehicle.title.trim() !== '';
+    const displayTitle = hasCustomTitle ? vehicle.title : `${vehicle.brand} ${vehicle.model}`.trim();
+
+    let images = [];
+    try {
+      images = typeof vehicle.images === 'string' ? JSON.parse(vehicle.images) : (vehicle.images || []);
+    } catch (e) { images = []; }
+
+    // ✅ Calcul de la note moyenne pour Flutter
+    const reviews = vehicle.reviews || [];
+    const avg = reviews.length > 0 
+      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length 
+      : null;
+
+    return {
+      ...vehicle,
+      title: displayTitle,
+      name: displayTitle,
+      images: Array.isArray(images) ? images : [],
+      // ✅ Nouvelles clés pour l'UI
+      averageRating: avg ? parseFloat(avg.toFixed(1)) : null,
+      reviewsCount: reviews.length
+    };
+  }
+
+  
+
+    async findAll(query: VehiclesQueryDto) {
+    const { proprietaireId, type, search } = query;
+    const andFilters: Prisma.VehicleWhereInput[] = [];
+
+    if (proprietaireId) andFilters.push({ ownerId: proprietaireId });
+    if (type) andFilters.push({ type: this.normalizeVehicleType(type) });
+
+    if (search) {
+      andFilters.push({
+        OR: [
+          { brand: { contains: search } },
+          { model: { contains: search } },
+          { title: { contains: search } },
+        ],
+      });
+    }
+
     const vehicles = await this.prisma.vehicle.findMany({
-      where: { isActive: true },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-          },
-        },
-        reviews: {
-          select: {
-            rating: true,
-          },
-        },
-        _count: {
-          select: {
-            reviews: true,
-            bookings: true,
-          },
-        },
+      where: andFilters.length > 0 ? { AND: andFilters } : {},
+      include: { 
+        owner: { select: { id: true, firstName: true, avatar: true } },
+        reviews: true // ✅ Crucial pour le calcul de la note
       },
+      orderBy: { createdAt: 'desc' },
     });
 
-    // Formater les données selon le format attendu par le frontend
-    return vehicles.map(vehicle => this.formatVehicleResponse(vehicle));
+    return vehicles.map(v => this.enrichVehicleResponse(v));
   }
 
-  async findOne(id: string) {
-    const vehicle = await this.prisma.vehicle.findUnique({
-      where: { id },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-          },
-        },
-        reviews: {
-          include: {
-            user: {
-              select: {
-                firstName: true,
-                lastName: true,
-              },
-            },
-          },
-        },
-        _count: {
-          select: {
-            reviews: true,
-            bookings: true,
-          },
-        },
-      },
-    });
-
-    if (!vehicle) {
-      throw new NotFoundException('Véhicule non trouvé');
-    }
-
-    return this.formatVehicleResponse(vehicle);
-  }
-
-  /**
-   * Récupère toutes les plages de dates où le véhicule est réservé / occupé
-   */
-  async getOccupiedDateRanges(vehicleId: string) {
-    // Vérifier que le véhicule existe
-    const vehicle = await this.prisma.vehicle.findUnique({
-      where: { id: vehicleId },
-      select: { id: true },
-    });
-
-    if (!vehicle) {
-      throw new NotFoundException('Véhicule non trouvé');
-    }
-
-    const bookings = await this.prisma.booking.findMany({
-      where: {
-        vehicleId,
-        status: {
-          in: [
-            'PENDING',
-            'CONFIRMED',
-            'CONFIRMEE',
-            'CHECKIN_CLIENT',
-            'CHECKIN_PROPRIO',
-            'EN_COURS_SEJOUR',
-          ],
-        },
-      },
-      select: {
-        id: true,
-        startDate: true,
-        endDate: true,
-        status: true,
-      },
-      orderBy: {
-        startDate: 'asc',
-      },
-    });
-
-    return bookings.map((b) => ({
-      id: b.id,
-      startDate: b.startDate,
-      endDate: b.endDate,
-      status: b.status,
-    }));
-  }
-
-  /**
-   * Formate un véhicule selon le format attendu par le frontend
-   */
-  private formatVehicleResponse(vehicle: any) {
-    // Calculer la notation
-    const notation = this.calculateNotation(vehicle.reviews || []);
-
-    // Parser les images depuis JSON string si nécessaire
-    let images = vehicle.images;
-    if (typeof images === 'string') {
-      try {
-        images = JSON.parse(images);
-      } catch (e) {
-        // Si ce n'est pas du JSON valide, traiter comme une seule image
-        images = images ? [images] : [];
-      }
-    } else if (!Array.isArray(images)) {
-      images = images ? [images] : [];
-    }
-
-    // Parser les features depuis JSON string si nécessaire
-    let features = vehicle.features;
-    if (typeof features === 'string') {
-      try {
-        features = JSON.parse(features);
-      } catch (e) {
-        // Si ce n'est pas du JSON valide, traiter comme une seule feature
-        features = features ? [features] : [];
-      }
-    } else if (!Array.isArray(features)) {
-      features = features ? [features] : [];
-    }
-
-    return {
-      id: vehicle.id,
-      marque: vehicle.brand,
-      modele: vehicle.model,
-      prixParJour: vehicle.pricePerDay,
-      imageUrl: Array.isArray(images) && images.length > 0 
-        ? images[0] 
-        : null,
-      titre: vehicle.title || `${vehicle.brand} ${vehicle.model} ${vehicle.year}`,
-      adresse: vehicle.address || null,
-      places: vehicle.capacity,
-      note: notation.note,
-      avis: notation.avis,
-      images: images,
-      commodites: features,
-      disponible: vehicle.isActive,
-      annee: vehicle.year,
-      kilometrage: vehicle.mileage || null,
-      transmission: vehicle.transmission,
-      carburant: vehicle.fuelType,
-      couleur: vehicle.color || null,
-      etatGeneral: vehicle.condition || null,
-      type: vehicle.type,
-      numeroPlaque: vehicle.plateNumber || null,
-      isVerified: vehicle.isVerified || false,
-      nombreLocations: vehicle._count?.bookings || 0,
-      proprietaire: vehicle.owner ? {
-        id: vehicle.owner.id,
-        email: vehicle.owner.email,
-        nom: `${vehicle.owner.firstName} ${vehicle.owner.lastName}`,
-        telephone: vehicle.owner.phone,
-      } : null,
-      createdAt: vehicle.createdAt,
-      updatedAt: vehicle.updatedAt,
-    };
-  }
-
-  /**
-   * Calcule la notation avec distribution des notes
-   */
-  private calculateNotation(reviews: any[]) {
-    if (!reviews || reviews.length === 0) {
-      return {
-        note: 0,
-        avis: 0,
-      };
-    }
-
-    const total = reviews.length;
-    const sum = reviews.reduce((acc, review) => acc + (review.rating || 0), 0);
-    const average = sum / total;
-
-    return {
-      note: Math.round(average * 10) / 10, // Arrondir à 1 décimale
-      avis: total,
-    };
-  }
-
-  async update(id: string, updateVehicleDto: UpdateVehicleDto) {
-    await this.findOne(id); // Vérifier que le véhicule existe
-
-    const transformedData = this.transformVehicleDto(updateVehicleDto);
-    const updated = await this.prisma.vehicle.update({
-      where: { id },
-      data: transformedData,
-      include: {
-        owner: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-          },
-        },
-        reviews: {
-          select: {
-            rating: true,
-          },
-        },
-        _count: {
-          select: {
-            bookings: true,
-          },
-        },
-      },
-    });
-
-    return this.formatVehicleResponse(updated);
+  async search(query: VehiclesQueryDto | string) {
+    if (typeof query === 'string') return this.findAll({ search: query });
+    return this.findAll(query);
   }
 
   async remove(id: string) {
-    await this.findOne(id); // Vérifier que le véhicule existe
-
-    return this.prisma.vehicle.update({
-      where: { id },
-      data: { isActive: false },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-          },
-        },
-      },
-    });
-  }
-
-  /**
-   * Récupère les véhicules d'un propriétaire
-   */
-  async findByOwner(ownerId: string) {
-    const vehicles = await this.prisma.vehicle.findMany({
-      where: { ownerId, isActive: true },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-          },
-        },
-        reviews: {
-          select: {
-            rating: true,
-          },
-        },
-        _count: {
-          select: {
-            reviews: true,
-            bookings: true,
-          },
-        },
-      },
-    });
-
-    return vehicles.map(vehicle => this.formatVehicleResponse(vehicle));
-  }
-
-  /**
-   * Vérifie si un utilisateur est propriétaire d'un véhicule
-   */
-  async isOwner(vehicleId: string, userId: string): Promise<boolean> {
-    const vehicle = await this.prisma.vehicle.findUnique({
-      where: { id: vehicleId },
-      select: { ownerId: true },
-    });
-
-    if (!vehicle) {
-      return false;
-    }
-
-    return vehicle.ownerId === userId;
-  }
-
-  async search(query: string) {
-    // Convertir la query en enum si possible, sinon chercher dans les strings
-    const vehicleTypes = Object.values(VehicleType);
-    const matchingTypes = vehicleTypes.filter(type => 
-      type.toLowerCase().includes(query.toLowerCase())
-    );
-
-    const vehicles = await this.prisma.vehicle.findMany({
-      where: {
-        AND: [
-          { isActive: true },
-          {
-            OR: [
-              { brand: { contains: query } },
-              { model: { contains: query } },
-              ...(matchingTypes.length > 0 ? [{ type: { in: matchingTypes } }] : []),
-            ],
-          },
-        ],
-      },
-      include: {
-        reviews: {
-          select: {
-            rating: true,
-          },
-        },
-        _count: {
-          select: {
-            reviews: true,
-            bookings: true,
-          },
-        },
-      },
-    });
-
-    return vehicles.map(vehicle => this.formatVehicleResponse(vehicle));
-  }
-
-  async findByType(type: string) {
-    // Valider que le type est un enum valide
-    const vehicleType = Object.values(VehicleType).find(t => t === type);
-    if (!vehicleType) {
-      throw new NotFoundException('Type de véhicule invalide');
-    }
-
-    const vehicles = await this.prisma.vehicle.findMany({
-      where: {
-        AND: [
-          { isActive: true },
-          { type: vehicleType },
-        ],
-      },
-      include: {
-        reviews: {
-          select: {
-            rating: true,
-          },
-        },
-        _count: {
-          select: {
-            reviews: true,
-            bookings: true,
-          },
-        },
-      },
-    });
-
-    return vehicles.map(vehicle => this.formatVehicleResponse(vehicle));
-  }
-
-  /**
-   * Retourne tous les types de véhicules disponibles
-   */
-  getVehicleTypes() {
-    const types = Object.values(VehicleType);
-    
-    // Mapper les types avec leurs labels en français
-    const typeLabels: Record<VehicleType, string> = {
-      [VehicleType.CAR]: 'Voiture',
-      [VehicleType.SUV]: 'SUV',
-      [VehicleType.MOTORCYCLE]: 'Moto',
-      [VehicleType.BICYCLE]: 'Vélo',
-      [VehicleType.SCOOTER]: 'Scooter',
-      [VehicleType.VAN]: 'Van',
-      [VehicleType.TRUCK]: 'Camion',
-    };
-
-    return types.map(type => ({
-      value: type,
-      label: typeLabels[type] || type,
-    }));
+    return await this.prisma.vehicle.delete({ where: { id } });
   }
 }

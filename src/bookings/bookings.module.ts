@@ -4,10 +4,16 @@ import { ReservationsController } from './reservations.controller';
 import { BookingsService } from './bookings.service';
 import { BookingValidationService } from './services/booking-validation.service';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { BookingsProcessor } from './bookings.processor'; // ✅ Import du processeur de Cron Jobs
 
 @Module({
   imports: [NotificationsModule],
   controllers: [BookingsController, ReservationsController],
-  providers: [BookingsService, BookingValidationService],
+  providers: [
+    BookingsService, 
+    BookingValidationService,
+    BookingsProcessor // ✅ Enregistrement du processeur pour activer le scan auto des expirations
+  ],
+  exports: [BookingsService],
 })
 export class BookingsModule {}

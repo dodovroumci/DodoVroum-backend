@@ -105,7 +105,7 @@ export class BookingValidationService {
       where: {
         residenceId,
         status: {
-          in: ['PENDING', 'CONFIRMED'],
+          in: ['PENDING', 'CONFIRMED', 'CONFIRMEE', 'CHECKIN_CLIENT', 'CHECKIN_PROPRIO', 'EN_COURS_SEJOUR'],
         },
         OR: [
           {
@@ -133,6 +133,39 @@ export class BookingValidationService {
     if (conflictingBooking) {
       throw new BadRequestException('Cette résidence n\'est pas disponible pour les dates sélectionnées');
     }
+
+    // Vérifier les dates bloquées (si le client Prisma a été régénéré)
+    if (this.prisma.blockedDate) {
+      const blockedDate = await this.prisma.blockedDate.findFirst({
+        where: {
+          residenceId,
+          OR: [
+            {
+              AND: [
+                { startDate: { lte: new Date(startDate) } },
+                { endDate: { gt: new Date(startDate) } },
+              ],
+            },
+            {
+              AND: [
+                { startDate: { lt: new Date(endDate) } },
+                { endDate: { gte: new Date(endDate) } },
+              ],
+            },
+            {
+              AND: [
+                { startDate: { gte: new Date(startDate) } },
+                { endDate: { lte: new Date(endDate) } },
+              ],
+            },
+          ],
+        },
+      });
+
+      if (blockedDate) {
+        throw new BadRequestException('Cette résidence est bloquée pour les dates sélectionnées');
+      }
+    }
   }
 
   private async validateVehicleAvailability(
@@ -140,6 +173,38 @@ export class BookingValidationService {
     startDate: string,
     endDate: string,
   ): Promise<void> {
+    // Vérifier que le client Prisma a été régénéré et vérifier les dates bloquées
+    if (this.prisma.blockedDate) {
+      const blockedDate = await this.prisma.blockedDate.findFirst({
+        where: {
+          vehicleId,
+          OR: [
+            {
+              AND: [
+                { startDate: { lte: new Date(startDate) } },
+                { endDate: { gt: new Date(startDate) } },
+              ],
+            },
+            {
+              AND: [
+                { startDate: { lt: new Date(endDate) } },
+                { endDate: { gte: new Date(endDate) } },
+              ],
+            },
+            {
+              AND: [
+                { startDate: { gte: new Date(startDate) } },
+                { endDate: { lte: new Date(endDate) } },
+              ],
+            },
+          ],
+        },
+      });
+
+      if (blockedDate) {
+        throw new BadRequestException('Ce véhicule est bloqué pour les dates sélectionnées');
+      }
+    }
     const vehicle = await this.prisma.vehicle.findUnique({
       where: { id: vehicleId },
     });

@@ -1,5 +1,20 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsArray, IsOptional, IsBoolean, Min, IsInt, ValidateIf, ValidateNested } from 'class-validator';
+/**
+ * @file src/residences/dto/create-residence.dto.ts
+ * @description DTO de création de résidence avec typage explicite pour Swagger.
+ */
+
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { 
+  IsString, 
+  IsNumber, 
+  IsArray, 
+  IsOptional, 
+  IsBoolean, 
+  Min, 
+  IsInt, 
+  ValidateIf, 
+  ValidateNested 
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 class LocationDto {
@@ -13,154 +28,166 @@ class LocationDto {
 }
 
 export class CreateResidenceDto {
-  @ApiProperty({ example: 'Villa de luxe avec piscine', required: false })
+  @ApiPropertyOptional({ example: 'Villa de luxe avec piscine' })
   @IsOptional()
   @IsString()
   title?: string;
 
-  @ApiProperty({ example: 'Villa de luxe avec piscine', description: 'Alias français pour title', required: false })
+  @ApiPropertyOptional({ example: 'Villa de luxe', description: 'Alias français pour title' })
   @IsOptional()
   @IsString()
   nom?: string;
 
-  @ApiProperty({ example: 'Magnifique villa avec vue sur mer...', required: false })
+  @ApiPropertyOptional({ example: 'Magnifique villa avec vue sur mer...' })
   @IsOptional()
   @IsString()
   description?: string;
 
-  @ApiProperty({ example: '123 Rue de la Plage', required: false })
+  @ApiPropertyOptional({ example: '123 Rue de la Plage' })
   @IsOptional()
   @IsString()
   address?: string;
 
-  @ApiProperty({ example: '123 Rue de la Plage', description: 'Alias français pour address', required: false })
+  @ApiPropertyOptional({ example: '123 Rue de la Plage', description: 'Alias français pour address' })
   @IsOptional()
   @IsString()
   adresse?: string;
 
-  @ApiProperty({ example: 'Nice', required: false })
+  @ApiPropertyOptional({ example: 'Nice' })
   @IsOptional()
   @IsString()
   city?: string;
 
-  @ApiProperty({ example: 'Nice', description: 'Alias français pour city', required: false })
+  @ApiPropertyOptional({ example: 'Nice', description: 'Alias français pour city' })
   @IsOptional()
   @IsString()
   ville?: string;
 
-  @ApiProperty({ example: 'France', required: false })
+  @ApiPropertyOptional({ example: 'France' })
   @IsOptional()
   @IsString()
   country?: string;
 
-  @ApiProperty({ example: 'France', description: 'Alias français pour country', required: false })
+  @ApiPropertyOptional({ example: 'France', description: 'Alias français pour country' })
   @IsOptional()
   @IsString()
   pays?: string;
 
-  @ApiProperty({ example: 150.50, required: false })
+  @ApiPropertyOptional({ example: 150.50 })
   @ValidateIf((o) => o.pricePerDay !== undefined || !o.pricePerNight)
   @IsOptional()
   @IsNumber()
   @Min(0)
   pricePerDay?: number;
 
-  @ApiProperty({ example: 150.50, description: 'Alias pour pricePerDay', required: false })
+  @ApiPropertyOptional({ example: 150.50, description: 'Alias pour pricePerDay' })
   @IsOptional()
   @IsNumber()
   @Min(0)
   pricePerNight?: number;
 
-  @ApiProperty({ example: 150.50, description: 'Alias français pour pricePerDay', required: false })
+  @ApiPropertyOptional({ example: 150.50, description: 'Alias français pour pricePerDay' })
   @IsOptional()
   @IsNumber()
   @Min(0)
   prixParNuit?: number;
 
-  @ApiProperty({ example: 6, required: false })
+  @ApiPropertyOptional({ example: 6 })
   @IsOptional()
   @IsInt()
   @Min(1)
   capacity?: number;
 
-  @ApiProperty({ example: 6, description: 'Alias français pour capacity', required: false })
+  @ApiPropertyOptional({ example: 6, description: 'Alias français pour capacity' })
   @IsOptional()
   @IsInt()
   @Min(1)
   capacite?: number;
 
-  @ApiProperty({ example: 3, required: false })
+  @ApiPropertyOptional({ example: 3 })
   @IsOptional()
   @IsInt()
   @Min(1)
   bedrooms?: number;
 
-  @ApiProperty({ example: 3, description: 'Alias français pour bedrooms', required: false })
+  @ApiPropertyOptional({ example: 3, description: 'Alias français pour bedrooms' })
   @IsOptional()
   @IsInt()
   @Min(1)
   nombreChambres?: number;
 
-  @ApiProperty({ example: 2, required: false })
+  @ApiPropertyOptional({ example: 2 })
   @IsOptional()
   @IsInt()
   @Min(1)
   bathrooms?: number;
 
-  @ApiProperty({ example: 2, description: 'Alias français pour bathrooms', required: false })
+  @ApiPropertyOptional({ example: 2, description: 'Alias français pour bathrooms' })
   @IsOptional()
   @IsInt()
   @Min(1)
   nombreSallesBain?: number;
 
-  @ApiProperty({ example: ['WiFi', 'Piscine', 'Parking', 'Climatisation'], required: false })
+  @ApiPropertyOptional({ 
+    example: ['WiFi', 'Piscine'], 
+    type: [String],
+    isArray: true 
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   amenities?: string[];
 
-  @ApiProperty({ example: ['WiFi', 'Piscine', 'Parking', 'Climatisation'], description: 'Alias français pour amenities', required: false })
+  @ApiPropertyOptional({ 
+    example: ['WiFi', 'Piscine'], 
+    description: 'Alias français pour amenities',
+    type: [String],
+    isArray: true 
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   commodites?: string[];
 
-  @ApiProperty({ example: ['https://example.com/image1.jpg', 'https://example.com/image2.jpg'] })
+  @ApiProperty({ 
+    example: ['https://example.com/image1.jpg'],
+    type: [String],
+    isArray: true 
+  })
   @IsArray()
   @IsString({ each: true })
   images: string[];
 
-  @ApiProperty({ example: 'Villa moderne', required: false })
+  @ApiPropertyOptional({ example: 'Villa moderne' })
   @IsOptional()
   @IsString()
   typeResidence?: string;
 
-  @ApiProperty({ example: true, required: false })
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 
-  @ApiProperty({ example: false, required: false })
+  @ApiPropertyOptional({ example: false })
   @IsOptional()
   @IsBoolean()
   isVerified?: boolean;
 
-  @ApiProperty({ example: 5.3600, required: false })
+  @ApiPropertyOptional({ example: 5.3600 })
   @ValidateIf((o) => !o.location)
   @IsOptional()
   @IsNumber()
   latitude?: number;
 
-  @ApiProperty({ example: -4.0083, required: false })
+  @ApiPropertyOptional({ example: -4.0083 })
   @ValidateIf((o) => !o.location)
   @IsOptional()
   @IsNumber()
   longitude?: number;
 
-  @ApiProperty({ 
-    type: LocationDto, 
-    required: false, 
-    description: 'Objet location avec latitude et longitude (alternative aux champs séparés)' 
+  @ApiPropertyOptional({
+    type: LocationDto,
+    description: 'Objet location (alternative aux champs séparés)'
   })
   @ValidateIf((o) => !o.latitude && !o.longitude)
   @IsOptional()
@@ -168,12 +195,9 @@ export class CreateResidenceDto {
   @Type(() => LocationDto)
   location?: LocationDto;
 
-  // Champ optionnel - utilisé uniquement par les administrateurs pour spécifier un propriétaire différent
-  // Pour les non-admins, le propriétaire est automatiquement l'utilisateur connecté
-  @ApiProperty({ 
-    example: 'user123', 
-    required: false,
-    description: 'ID du propriétaire (uniquement pour les administrateurs). Par défaut, l\'utilisateur connecté devient le propriétaire.'
+  @ApiPropertyOptional({
+    example: 'user123',
+    description: 'ID du propriétaire (Admin only)'
   })
   @IsOptional()
   @IsString()

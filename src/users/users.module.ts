@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
-import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
+import { UsersController } from './users.controller';
 import { IdentityVerificationModule } from '../identity-verification/identity-verification.module';
 
 @Module({
   imports: [IdentityVerificationModule],
-  controllers: [UsersController],
+  controllers: [UsersController], // <-- DOIT ÊTRE PRÉSENT
   providers: [UsersService],
-  exports: [UsersService],
+  exports: [UsersService], // Pour que l'AuthService puisse l'utiliser
 })
 export class UsersModule {}

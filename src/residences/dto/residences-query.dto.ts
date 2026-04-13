@@ -1,27 +1,43 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+/**
+ * @file src/residences/dto/residences-query.dto.ts
+ * @description DTO de filtrage des résidences avec héritage de pagination.
+ */
+
+import { ApiPropertyOptional, IntersectionType } from '@nestjs/swagger';
+import { IsOptional, IsString, IsEnum } from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
-export class ResidencesQueryDto extends PaginationDto {
+/**
+ * @enum ResidenceStatus
+ * @description État de disponibilité d'une résidence.
+ */
+export enum ResidenceStatus {
+  AVAILABLE = 'available',
+  OCCUPIED = 'occupied',
+}
+
+export class ResidencesQueryDto extends IntersectionType(PaginationDto) {
   @ApiPropertyOptional({
     example: 'villa',
-    description: 'Filtrer les résidences par type (ex: villa, appartement, studio)',
+    description: 'Filtrer par type (ex: villa, appartement, studio)',
   })
   @IsOptional()
   @IsString()
   type?: string;
 
   @ApiPropertyOptional({
-    example: 'available',
-    description: 'Filtrer les résidences par statut (available ou occupied)',
+    enum: ResidenceStatus,
+    enumName: 'ResidenceStatus',
+    example: ResidenceStatus.AVAILABLE,
+    description: 'Filtrer par statut de disponibilité',
   })
   @IsOptional()
-  @IsString()
-  status?: 'available' | 'occupied';
+  @IsEnum(ResidenceStatus)
+  status?: ResidenceStatus;
 
   @ApiPropertyOptional({
     example: 'abidjan',
-    description: 'Rechercher dans le titre, la description, la ville, l\'adresse ou le pays',
+    description: 'Rechercher dans le titre, la ville, l\'adresse ou le pays',
   })
   @IsOptional()
   @IsString()
@@ -29,10 +45,17 @@ export class ResidencesQueryDto extends PaginationDto {
 
   @ApiPropertyOptional({
     example: 'user123',
-    description: 'Filtrer les résidences par propriétaire (ID du propriétaire)',
+    description: 'ID du propriétaire (proprietaireId)',
   })
   @IsOptional()
   @IsString()
   proprietaireId?: string;
-}
 
+  @ApiPropertyOptional({
+    example: 'user123',
+    description: 'Alias pour proprietaireId (compatibilité frontend)',
+  })
+  @IsOptional()
+  @IsString()
+  owner_id?: string;
+}

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { PaginationService, PaginationOptions, PaginationResult } from '../common/services/pagination.service';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { UpdateOfferDto } from './dto/update-offer.dto';
 import { ResidencesService } from '../residences/residences.service';
@@ -9,6 +10,7 @@ import { VehiclesService } from '../vehicles/vehicles.service';
 export class OffersService {
   constructor(
     private prisma: PrismaService,
+    private paginationService: PaginationService,
     private residencesService: ResidencesService,
     private vehiclesService: VehiclesService,
   ) {}
@@ -124,57 +126,88 @@ export class OffersService {
     return this.formatOfferResponse(created);
   }
 
-  async findAll() {
-    const offers = await this.prisma.offer.findMany({
-      where: { isActive: true },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-          },
-        },
-        residence: {
-          include: {
-            reviews: {
-              select: {
-                rating: true,
-              },
-            },
-            _count: {
-              select: {
-                reviews: true,
-              },
-            },
-          },
-        },
-        vehicle: {
-          include: {
-            reviews: {
-              select: {
-                rating: true,
-              },
-            },
-            _count: {
-              select: {
-                reviews: true,
-                bookings: true,
-              },
-            },
-          },
-        },
-        _count: {
-          select: {
-            bookings: true,
-          },
-        },
-      },
-    });
+  async findAll(options?: { proprietaireId?: string } & PaginationOptions): Promise<PaginationResult<any> | any[]> {
+    const { proprietaireId, ...paginationOptions } = options || {};
+    const { page, limit, sortBy, sortOrder } = this.paginationService.validatePaginationOptions(paginationOptions);
+    
+    const where: any = { isActive: true };
+    
+    if (proprietaireId) {
+      where.ownerId = proprietaireId;
+    }
 
-    return offers.map(offer => this.formatOfferResponse(offer));
+    // Vérifier si la pagination est demandée (si limit est défini et différent de la valeur par défaut, ou page > 1)
+    const isPaginationRequested = paginationOptions.page !== undefined || paginationOptions.limit !== undefined;
+    
+    const skip = isPaginationRequested ? this.paginationService.calculateSkip(page, limit) : undefined;
+    const take = isPaginationRequested ? limit : undefined;
+
+    const [offers, total] = await Promise.all([
+      this.prisma.offer.findMany({
+        where,
+        ...(skip !== undefined && { skip }),
+        ...(take !== undefined && { take }),
+        orderBy: { [sortBy]: sortOrder },
+        include: {
+          owner: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              phone: true,
+            },
+          },
+          residence: {
+            include: {
+              reviews: {
+                select: {
+                  rating: true,
+                },
+              },
+              _count: {
+                select: {
+                  reviews: true,
+                },
+              },
+            },
+          },
+          vehicle: {
+            include: {
+              reviews: {
+                select: {
+                  rating: true,
+                },
+              },
+              _count: {
+                select: {
+                  reviews: true,
+                  bookings: true,
+                },
+              },
+            },
+          },
+          _count: {
+            select: {
+              bookings: true,
+            },
+          },
+        },
+      }),
+      isPaginationRequested ? this.prisma.offer.count({ where }) : Promise.resolve(0),
+    ]);
+
+    const formattedOffers = offers.map(offer => this.formatOfferResponse(offer));
+
+    // Si la pagination est demandée, retourner un objet paginé, sinon retourner simplement le tableau
+    if (isPaginationRequested) {
+      return {
+        data: formattedOffers,
+        pagination: this.paginationService.calculatePaginationMeta(page, limit, total),
+      };
+    }
+
+    return formattedOffers;
   }
 
   async findOne(id: string) {
@@ -304,6 +337,13 @@ export class OffersService {
     // Formater le véhicule
     const vehicle = this.formatVehicleForOffer(offer.vehicle);
 
+    // 2. Calculer la note globale de l'Offre Combinée
+    const reviews = offer.reviews || [];
+    const count = reviews.length;
+    const avg = count > 0 
+      ? reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / count 
+      : null;
+
     return {
       id: offer.id,
       titre: offer.title,
@@ -315,6 +355,7 @@ export class OffersService {
       voiture: vehicle,
       isVerified: offer.isVerified || false,
       nombreReservations: offer._count?.bookings || 0,
+      proprietaireId: offer.ownerId || (offer.owner ? offer.owner.id : null),
       proprietaire: offer.owner ? {
         id: offer.owner.id,
         email: offer.owner.email,

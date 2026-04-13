@@ -4,9 +4,9 @@ import { IdentityVerificationService } from './identity-verification.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 
 @Module({
-  controllers: [IdentityVerificationController],
+  // ⚠️ ISOLATION POUR DIAGNOSTIC
+     controllers: [IdentityVerificationController],
   providers: [IdentityVerificationService, PrismaService],
   exports: [IdentityVerificationService],
 })
 export class IdentityVerificationModule {}
-

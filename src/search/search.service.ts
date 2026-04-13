@@ -17,12 +17,17 @@ export class SearchService {
    * @returns Résultats combinés de la recherche
    */
   async globalSearch(query: string) {
-    // Exécuter les recherches en parallèle pour optimiser les performances
-    const [residences, vehicles, offers] = await Promise.all([
+    // Exécuter les recherches en parallèle
+    const [residencesResult, vehiclesResult, offersResult] = await Promise.all([
       this.residencesService.search(query),
       this.vehiclesService.search(query),
       this.offersService.search(query),
     ]);
+
+    // Forcer le typage en tableau
+    const residences = Array.isArray(residencesResult) ? residencesResult : [];
+    const vehicles = Array.isArray(vehiclesResult) ? vehiclesResult : [];
+    const offers = Array.isArray(offersResult) ? offersResult : [];
 
     return {
       residences,

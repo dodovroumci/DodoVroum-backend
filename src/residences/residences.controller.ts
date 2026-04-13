@@ -4,11 +4,12 @@ import { ResidencesService } from './residences.service';
 import { CreateResidenceDto } from './dto/create-residence.dto';
 import { UpdateResidenceDto } from './dto/update-residence.dto';
 import { ResidencesQueryDto } from './dto/residences-query.dto';
+import { BlockDateDto } from './dto/block-date.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ResidenceOwnerGuard } from './guards/residence-owner.guard';
 import { PrismaService } from '../common/prisma/prisma.service';
 
-@ApiTags('residences')
+@ApiTags('Residences')
 @Controller('residences')
 export class ResidencesController {
   constructor(
@@ -52,7 +53,13 @@ export class ResidencesController {
   @ApiOperation({ summary: 'Obtenir toutes les résidences avec pagination et filtres' })
   @ApiResponse({ status: 200, description: 'Liste paginée des résidences' })
   findAll(@Query() query: ResidencesQueryDto) {
-    return this.residencesService.findAll(query);
+    // Normaliser owner_id vers proprietaireId si nécessaire
+    const normalizedQuery = { ...query };
+    if (normalizedQuery.owner_id && !normalizedQuery.proprietaireId) {
+      normalizedQuery.proprietaireId = normalizedQuery.owner_id;
+      delete normalizedQuery.owner_id;
+    }
+    return this.residencesService.findAll(normalizedQuery);
   }
 
   @Get('my-residences')
@@ -83,11 +90,12 @@ export class ResidencesController {
   }
 
   @Get(':id/booked-dates')
-  @ApiOperation({ summary: 'Récupérer les plages de dates réservées pour une résidence' })
-  @ApiResponse({ status: 200, description: 'Liste des plages réservées' })
+  @ApiOperation({ summary: 'Récupérer la liste exhaustive des dates indisponibles (Format: YYYY-MM-DD)' })
+  @ApiResponse({ status: 200, description: 'Tableau de strings des dates occupées' })
   @ApiResponse({ status: 404, description: 'Résidence non trouvée' })
-  getBookedDates(@Param('id') id: string) {
-    return this.residencesService.getOccupiedDateRanges(id);
+  async getBookedDates(@Param('id') id: string) {
+    // On appelle la nouvelle méthode qui fusionne réservations + blocages manuels
+    return this.residencesService.getBookedDates(id);
   }
 
   @Get(':id/availability')
@@ -128,5 +136,36 @@ export class ResidencesController {
   @ApiResponse({ status: 404, description: 'Résidence non trouvée' })
   remove(@Param('id') id: string) {
     return this.residencesService.remove(id);
+  }
+
+  @Post(':id/blocked-dates')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, ResidenceOwnerGuard)
+  @ApiOperation({ summary: 'Bloquer des dates pour une résidence' })
+  @ApiResponse({ status: 201, description: 'Dates bloquées avec succès' })
+  @ApiResponse({ status: 400, description: 'Dates invalides ou conflit avec des réservations existantes' })
+  @ApiResponse({ status: 403, description: 'Accès interdit - Vous n\'êtes pas propriétaire de cette résidence' })
+  @ApiResponse({ status: 404, description: 'Résidence non trouvée' })
+  blockDates(@Param('id') id: string, @Body() blockDateDto: BlockDateDto) {
+    return this.residencesService.blockDates(id, blockDateDto);
+  }
+
+  @Get(':id/blocked-dates')
+  @ApiOperation({ summary: 'Récupérer toutes les dates bloquées d\'une résidence' })
+  @ApiResponse({ status: 200, description: 'Liste des dates bloquées' })
+  @ApiResponse({ status: 404, description: 'Résidence non trouvée' })
+  getBlockedDates(@Param('id') id: string) {
+    return this.residencesService.getBlockedDates(id);
+  }
+
+  @Delete(':id/blocked-dates/:blockedDateId')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, ResidenceOwnerGuard)
+  @ApiOperation({ summary: 'Supprimer une période de dates bloquées' })
+  @ApiResponse({ status: 200, description: 'Période bloquée supprimée avec succès' })
+  @ApiResponse({ status: 403, description: 'Accès interdit - Vous n\'êtes pas propriétaire de cette résidence' })
+  @ApiResponse({ status: 404, description: 'Résidence ou période bloquée non trouvée' })
+  unblockDates(@Param('id') id: string, @Param('blockedDateId') blockedDateId: string) {
+    return this.residencesService.unblockDates(id, blockedDateId);
   }
 }

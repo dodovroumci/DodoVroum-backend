@@ -8,7 +8,8 @@ import { ResidenceOwnerGuard } from './guards/residence-owner.guard';
 
 @Module({
   imports: [CacheConfigModule, LoggingModule],
-  controllers: [ResidencesController],
+  // ✅ RÉACTIVÉ : Indispensable pour que NestJS et Swagger voient les routes
+  controllers: [ResidencesController], 
   providers: [ResidencesService, PaginationService, ResidenceOwnerGuard],
   exports: [ResidencesService],
 })

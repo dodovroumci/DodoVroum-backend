@@ -28,10 +28,17 @@ export class BookingsController {
   }
 
   @Get('my-bookings')
-  @ApiOperation({ summary: 'Obtenir mes réservations' })
+  @ApiOperation({ summary: 'Obtenir mes réservations (en tant que client)' })
   @ApiResponse({ status: 200, description: 'Liste de mes réservations' })
   findMyBookings(@Request() req) {
     return this.bookingsService.findByUser(req.user.id);
+  }
+
+  @Get('my-properties-bookings')
+  @ApiOperation({ summary: 'Obtenir les réservations de mes propriétés (en tant que propriétaire)' })
+  @ApiResponse({ status: 200, description: 'Liste des réservations de mes propriétés (résidences, véhicules, offres)' })
+  findMyPropertiesBookings(@Request() req) {
+    return this.bookingsService.findByOwner(req.user.id);
   }
 
   @Get(':id')
