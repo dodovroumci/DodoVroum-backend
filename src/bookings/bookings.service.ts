@@ -26,27 +26,41 @@ export class BookingsService {
 
     const { paymentOption, downPaymentAmount, paymentMethod, ...bookingPayload } = createBookingDto;
 
-    let totalPrice = bookingPayload.totalPrice;
-    if (!totalPrice) {
-      totalPrice = await this.bookingValidationService.calculateTotalPrice(
+    const startDate = new Date(bookingPayload.startDate);
+    const endDate = new Date(bookingPayload.endDate);
+
+    await this.internalCheckAvailability(
+      bookingPayload.residenceId,
+      bookingPayload.vehicleId,
+      bookingPayload.offerId,
+      startDate,
+      endDate,
+    );
+
+    const totalPrice =
+      bookingPayload.totalPrice ??
+      (await this.bookingValidationService.calculateTotalPrice(
         bookingPayload.residenceId,
         bookingPayload.vehicleId,
         bookingPayload.offerId,
         bookingPayload.startDate,
         bookingPayload.endDate,
-      );
-    }
+      ));
 
     const normalizedPaymentOption = (paymentOption || 'FULL_PAYMENT') as 'DOWN_PAYMENT' | 'FULL_PAYMENT';
     const amountToCharge = normalizedPaymentOption === 'DOWN_PAYMENT' ? downPaymentAmount : totalPrice;
 
-    const startDate = new Date(bookingPayload.startDate);
-    const endDate = new Date(bookingPayload.endDate);
     const { status: _ignoredStatus, ...bookingData } = bookingPayload;
+
+    const overlapDto = {
+      ...createBookingDto,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+    };
 
     const booking = await this.prisma.$transaction(
       async (tx) => {
-        await this.bookingValidationService.assertNoBlockingOverlapTx(tx, createBookingDto);
+        await this.bookingValidationService.assertNoBlockingOverlapTx(tx, overlapDto);
 
         const newBooking = await tx.booking.create({
           data: {
@@ -82,6 +96,25 @@ export class BookingsService {
     const fullBooking = await this.findOneRaw(booking.id);
     await this.sendBookingNotification(fullBooking, userId, 'CREATED');
     return this.formatBookingResponse(fullBooking);
+  }
+
+  /**
+   * Verrou court (~15 min) sur les créneaux avec paiement PENDING + conflits PAID / confirmés, etc.
+   */
+  private async internalCheckAvailability(
+    residenceId: string | undefined | null,
+    vehicleId: string | undefined | null,
+    offerId: string | undefined | null,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<void> {
+    await this.bookingValidationService.assertNoBlockingOverlapBeforeCreate({
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      residenceId: residenceId ?? undefined,
+      vehicleId: vehicleId ?? undefined,
+      offerId: offerId ?? undefined,
+    } as CreateBookingDto);
   }
 
   private readonly rescheduleBlockedStatuses: BookingStatus[] = [

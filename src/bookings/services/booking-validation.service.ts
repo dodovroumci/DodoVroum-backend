@@ -1,9 +1,13 @@
 import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
+import { BookingStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateBookingDto } from '../dto/create-booking.dto';
 
 @Injectable()
 export class BookingValidationService {
+  /** Fenêtre pendant laquelle un booking `PENDING` (paiement en cours) bloque le créneau. */
+  private static readonly PAYMENT_HOLD_MS = 15 * 60 * 1000;
+
   constructor(private prisma: PrismaService) {}
 
   async validateBooking(createBookingDto: CreateBookingDto): Promise<void> {
@@ -83,16 +87,145 @@ export class BookingValidationService {
     }
   }
 
-  /** Statuts considérés comme une occupation réelle pour les chevauchements. */
-  private static readonly OVERLAP_BOOKING_STATUSES = [
-    'PENDING',
-    'PAID',
-    'CONFIRMED',
-    'CONFIRMEE',
-    'CHECKIN_CLIENT',
-    'CHECKIN_PROPRIO',
-    'EN_COURS_SEJOUR',
-  ] as const;
+  /**
+   * Filtre statut + dates pour les conflits :
+   * - statuts « fermes » toujours bloquants ;
+   * - `PENDING` seulement si créé récemment (créneau réservé le temps du paiement).
+   */
+  private buildOverlapWhere(
+    startDate: string,
+    endDate: string,
+    excludeBookingId?: string,
+  ): Prisma.BookingWhereInput {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const pendingSince = new Date(Date.now() - BookingValidationService.PAYMENT_HOLD_MS);
+
+    const alwaysBlock: BookingStatus[] = [
+      BookingStatus.PAID,
+      BookingStatus.CONFIRMED,
+      BookingStatus.CONFIRMEE,
+      BookingStatus.CHECKIN_CLIENT,
+      BookingStatus.CHECKIN_PROPRIO,
+      BookingStatus.EN_COURS_SEJOUR,
+      BookingStatus.ONGOING,
+    ];
+
+    return {
+      ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
+      AND: [
+        {
+          OR: [
+            { status: { in: alwaysBlock } },
+            { AND: [{ status: BookingStatus.PENDING }, { createdAt: { gte: pendingSince } }] },
+          ],
+        },
+        {
+          OR: [
+            { AND: [{ startDate: { lte: start } }, { endDate: { gt: start } }] },
+            { AND: [{ startDate: { lt: end } }, { endDate: { gte: end } }] },
+            { AND: [{ startDate: { gte: start } }, { endDate: { lte: end } }] },
+          ],
+        },
+      ],
+    };
+  }
+
+  /**
+   * Vérifie les chevauchements (verrou ~15 min sur PENDING) avant création — hors transaction.
+   */
+  async assertNoBlockingOverlapBeforeCreate(dto: CreateBookingDto): Promise<void> {
+    await this.runAssertNoBlockingOverlap(this.prisma, dto);
+  }
+
+  /**
+   * Même vérification à l’intérieur d’une transaction Prisma (si besoin ailleurs).
+   */
+  async assertNoBlockingOverlapTx(tx: Prisma.TransactionClient, dto: CreateBookingDto): Promise<void> {
+    await this.runAssertNoBlockingOverlap(tx, dto);
+  }
+
+  private async runAssertNoBlockingOverlap(
+    db: Pick<PrismaService, 'booking' | 'offer'>,
+    dto: CreateBookingDto,
+  ): Promise<void> {
+    const { startDate, endDate, residenceId, vehicleId, offerId } = dto;
+
+    if (offerId) {
+      const offer = await db.offer.findUnique({
+        where: { id: offerId },
+        select: { residenceId: true, vehicleId: true },
+      });
+      if (!offer) {
+        throw new BadRequestException('Offre non trouvée');
+      }
+
+      const byOffer = await db.booking.findFirst({
+        where: {
+          offerId,
+          ...this.buildOverlapWhere(startDate, endDate),
+        },
+      });
+      if (byOffer) {
+        throw new BadRequestException(
+          'Cette période est déjà réservée ou un paiement est en cours. Réessayez plus tard.',
+        );
+      }
+
+      const byRes = await db.booking.findFirst({
+        where: {
+          OR: [{ residenceId: offer.residenceId }, { offer: { residenceId: offer.residenceId } }],
+          ...this.buildOverlapWhere(startDate, endDate),
+        },
+      });
+      if (byRes) {
+        throw new BadRequestException(
+          'Cette période est déjà réservée ou un paiement est en cours. Réessayez plus tard.',
+        );
+      }
+
+      const byVeh = await db.booking.findFirst({
+        where: {
+          OR: [{ vehicleId: offer.vehicleId }, { offer: { vehicleId: offer.vehicleId } }],
+          ...this.buildOverlapWhere(startDate, endDate),
+        },
+      });
+      if (byVeh) {
+        throw new BadRequestException(
+          'Cette période est déjà réservée ou un paiement est en cours. Réessayez plus tard.',
+        );
+      }
+      return;
+    }
+
+    if (residenceId) {
+      const conflict = await db.booking.findFirst({
+        where: {
+          OR: [{ residenceId }, { offer: { residenceId } }],
+          ...this.buildOverlapWhere(startDate, endDate),
+        },
+      });
+      if (conflict) {
+        throw new BadRequestException(
+          'Cette période est déjà réservée ou un paiement est en cours. Réessayez plus tard.',
+        );
+      }
+    }
+
+    if (vehicleId) {
+      const conflict = await db.booking.findFirst({
+        where: {
+          OR: [{ vehicleId }, { offer: { vehicleId } }],
+          ...this.buildOverlapWhere(startDate, endDate),
+        },
+      });
+      if (conflict) {
+        throw new BadRequestException(
+          'Cette période est déjà réservée ou un paiement est en cours. Réessayez plus tard.',
+        );
+      }
+    }
+  }
 
   async validateRescheduleDates(
     booking: {
@@ -142,34 +275,11 @@ export class BookingValidationService {
       throw new BadRequestException('Cette résidence n\'est pas disponible');
     }
 
-    // Vérifier les conflits de réservation
+    // Vérifier les conflits de réservation (résidence directe ou pack / offre sur cette résidence)
     const conflictingBooking = await this.prisma.booking.findFirst({
       where: {
-        residenceId,
-        ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
-        status: {
-          in: [...BookingValidationService.OVERLAP_BOOKING_STATUSES],
-        },
-        OR: [
-          {
-            AND: [
-              { startDate: { lte: new Date(startDate) } },
-              { endDate: { gt: new Date(startDate) } },
-            ],
-          },
-          {
-            AND: [
-              { startDate: { lt: new Date(endDate) } },
-              { endDate: { gte: new Date(endDate) } },
-            ],
-          },
-          {
-            AND: [
-              { startDate: { gte: new Date(startDate) } },
-              { endDate: { lte: new Date(endDate) } },
-            ],
-          },
-        ],
+        OR: [{ residenceId }, { offer: { residenceId } }],
+        ...this.buildOverlapWhere(startDate, endDate, excludeBookingId),
       },
     });
 
@@ -270,34 +380,11 @@ export class BookingValidationService {
       throw new BadRequestException('Ce véhicule n\'est pas disponible');
     }
 
-    // Vérifier les conflits de réservation
+    // Vérifier les conflits de réservation (véhicule direct ou offre incluant ce véhicule)
     const conflictingBooking = await this.prisma.booking.findFirst({
       where: {
-        vehicleId,
-        ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
-        status: {
-          in: [...BookingValidationService.OVERLAP_BOOKING_STATUSES],
-        },
-        OR: [
-          {
-            AND: [
-              { startDate: { lte: new Date(startDate) } },
-              { endDate: { gt: new Date(startDate) } },
-            ],
-          },
-          {
-            AND: [
-              { startDate: { lt: new Date(endDate) } },
-              { endDate: { gte: new Date(endDate) } },
-            ],
-          },
-          {
-            AND: [
-              { startDate: { gte: new Date(startDate) } },
-              { endDate: { lte: new Date(endDate) } },
-            ],
-          },
-        ],
+        OR: [{ vehicleId }, { offer: { vehicleId } }],
+        ...this.buildOverlapWhere(startDate, endDate, excludeBookingId),
       },
     });
 
@@ -334,6 +421,19 @@ export class BookingValidationService {
     const now = new Date();
     if (offer.validFrom > now || offer.validTo < now) {
       throw new BadRequestException('Cette offre n\'est pas valide pour le moment');
+    }
+
+    const sameOfferOverlap = await this.prisma.booking.findFirst({
+      where: {
+        offerId,
+        ...this.buildOverlapWhere(startDate, endDate, excludeBookingId),
+      },
+    });
+    if (sameOfferOverlap) {
+      if (excludeBookingId) {
+        throw new ConflictException('Ces dates sont déjà occupées.');
+      }
+      throw new BadRequestException('Cette offre n\'est pas disponible pour les dates sélectionnées');
     }
 
     // Vérifier la disponibilité de la résidence et du véhicule
