@@ -40,31 +40,44 @@ export class BookingsService {
     const normalizedPaymentOption = (paymentOption || 'FULL_PAYMENT') as 'DOWN_PAYMENT' | 'FULL_PAYMENT';
     const amountToCharge = normalizedPaymentOption === 'DOWN_PAYMENT' ? downPaymentAmount : totalPrice;
 
-    const booking = await this.prisma.$transaction(async (tx) => {
-      const newBooking = await tx.booking.create({
-        data: {
-          ...bookingPayload,
-          userId,
-          totalPrice,
-          startDate: new Date(bookingPayload.startDate),
-          endDate: new Date(bookingPayload.endDate),
-          status: bookingPayload.status || BookingStatus.PENDING,
-        } as Prisma.BookingUncheckedCreateInput,
-      });
+    const startDate = new Date(bookingPayload.startDate);
+    const endDate = new Date(bookingPayload.endDate);
+    const { status: _ignoredStatus, ...bookingData } = bookingPayload;
 
-      await tx.payment.create({
-        data: {
-          amount: amountToCharge,
-          currency: 'XOF',
-          status: PaymentStatus.COMPLETED,
-          method: paymentMethod || PaymentMethod.CARD,
-          userId,
-          bookingId: newBooking.id,
-        },
-      });
+    const booking = await this.prisma.$transaction(
+      async (tx) => {
+        await this.bookingValidationService.assertNoBlockingOverlapTx(tx, createBookingDto);
 
-      return newBooking;
-    });
+        const newBooking = await tx.booking.create({
+          data: {
+            ...bookingData,
+            userId,
+            totalPrice,
+            startDate,
+            endDate,
+            status: BookingStatus.PENDING,
+          } as Prisma.BookingUncheckedCreateInput,
+        });
+
+        await tx.payment.create({
+          data: {
+            amount: amountToCharge,
+            currency: 'XOF',
+            status: PaymentStatus.PENDING,
+            method: paymentMethod || PaymentMethod.CARD,
+            userId,
+            bookingId: newBooking.id,
+          },
+        });
+
+        return newBooking;
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 5000,
+        timeout: 15000,
+      },
+    );
 
     const fullBooking = await this.findOneRaw(booking.id);
     await this.sendBookingNotification(fullBooking, userId, 'CREATED');
