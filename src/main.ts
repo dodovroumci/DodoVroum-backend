@@ -1,12 +1,19 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Derrière nginx / load balancer : req.ip et X-Forwarded-For fiables pour la whitelist webhook
+  if (process.env.TRUST_PROXY === 'true' || process.env.TRUST_PROXY === '1') {
+    app.set('trust proxy', true);
+    logger.log('Trust proxy activé (TRUST_PROXY) — IP client fiable pour les webhooks');
+  }
 
   // 1. Configuration CORS - Mise à jour pour inclure le Dashboard Local
   app.enableCors({

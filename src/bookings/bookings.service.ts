@@ -344,6 +344,7 @@ export class BookingsService {
 private formatBookingResponse(booking: any) {
     const statusMap: Record<string, string> = {
       'PENDING': 'pending',
+      'PAID': 'paid',
       'CONFIRMEE': 'confirmee',
       'EN_COURS_SEJOUR': 'enCoursSejour',
       'COMPLETED': 'terminee',

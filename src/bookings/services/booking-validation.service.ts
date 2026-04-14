@@ -86,6 +86,7 @@ export class BookingValidationService {
   /** Statuts considérés comme une occupation réelle pour les chevauchements. */
   private static readonly OVERLAP_BOOKING_STATUSES = [
     'PENDING',
+    'PAID',
     'CONFIRMED',
     'CONFIRMEE',
     'CHECKIN_CLIENT',

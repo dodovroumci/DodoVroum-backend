@@ -187,7 +187,7 @@ export class ResidencesService {
         where: {
           residenceId,
           // On inclut les statuts qui signifient que le logement est pris
-          status: { in: ['CONFIRMED', 'PENDING', 'CONFIRMEE'] }, 
+          status: { in: ['CONFIRMED', 'PENDING', 'PAID', 'CONFIRMEE'] }, 
           startDate: { lte: today }, 
           endDate: { gte: today }
         }
@@ -213,7 +213,7 @@ export class ResidencesService {
     const bookingConflict = await this.prisma.booking.findFirst({
       where: {
         residenceId: id,
-        status: { in: ['CONFIRMED', 'PENDING', 'CONFIRMEE'] },
+        status: { in: ['CONFIRMED', 'PENDING', 'PAID', 'CONFIRMEE'] },
         AND: [
           { startDate: { lt: endDate } },
           { endDate: { gt: startDate } }
@@ -256,7 +256,7 @@ export class ResidencesService {
           residenceId,
           // ONGARDE UNILATERALE : On bloque tout ce qui n'est pas annulé
           // Si tu as un statut spécifique comme 'EN_COURS' ou 'COMPLETED', ajoute-le ici
-          status: { in: ['CONFIRMED', 'PENDING', 'CONFIRMEE'] },
+          status: { in: ['CONFIRMED', 'PENDING', 'PAID', 'CONFIRMEE'] },
           endDate: { gte: today }
         },
         select: { startDate: true, endDate: true }

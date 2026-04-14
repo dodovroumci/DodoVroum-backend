@@ -203,6 +203,10 @@ model Booking {
 model Payment {
   id            String        @id @default(cuid())
   amount        Float
+  /// Montant de la réservation avant frais plateforme (ex. totalPrice du booking)
+  baseAmount    Float?
+  /// Frais plateforme (ex. 1 %)
+  fees          Float?
   currency      String        @default("EUR")
   status        PaymentStatus @default(PENDING)
   method        PaymentMethod
@@ -357,6 +361,8 @@ enum VehicleType {
 
 enum BookingStatus {
   PENDING
+  /// Paiement en ligne reçu (ex. GeniusPay) — avant confirmation propriétaire si besoin
+  PAID
   CONFIRMED
   ONGOING
   CANCELLED
