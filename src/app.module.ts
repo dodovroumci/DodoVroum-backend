@@ -16,7 +16,7 @@ import { OffersModule } from './offers/offers.module';
 import { UploadModule } from './upload/upload.module';
 import { FavoritesModule } from './favorites/favorites.module';
 import { ReviewsModule } from './reviews/reviews.module';
-
+import { PaymentsModule } from './payments/payments.module'; // ✅ Ajoute cette ligne
 /**
  * @description Expert Fullstack - Point d'entrée de l'architecture NestJS
  * Centralise les modules globaux, la sécurité et le métier.
@@ -49,6 +49,7 @@ import { ReviewsModule } from './reviews/reviews.module';
     UploadModule,
     FavoritesModule,
     ReviewsModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
   providers: [],
