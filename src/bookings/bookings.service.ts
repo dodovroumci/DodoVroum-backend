@@ -69,7 +69,7 @@ export class BookingsService {
             totalPrice,
             startDate,
             endDate,
-            status: BookingStatus.PENDING,
+            status: BookingStatus.AWAITING_PAYMENT,
           } as Prisma.BookingUncheckedCreateInput,
         });
 
@@ -247,7 +247,9 @@ export class BookingsService {
   async cancelByClient(id: string, userId: string) {
     const booking = await this.prisma.booking.findUnique({ where: { id } });
     if (!booking || booking.userId !== userId) throw new BadRequestException('Action interdite.');
-    if (booking.status !== 'PENDING') throw new BadRequestException('Seule une réservation en attente peut être annulée.');
+    if (booking.status !== BookingStatus.PENDING && booking.status !== BookingStatus.AWAITING_PAYMENT) {
+      throw new BadRequestException('Seule une réservation en attente peut être annulée.');
+    }
 
     const updated = await this.prisma.booking.update({
       where: { id },
@@ -390,6 +392,7 @@ export class BookingsService {
 private formatBookingResponse(booking: any) {
     const statusMap: Record<string, string> = {
       'PENDING': 'pending',
+      'AWAITING_PAYMENT': 'awaitingPayment',
       'PAID': 'paid',
       'CONFIRMEE': 'confirmee',
       'EN_COURS_SEJOUR': 'enCoursSejour',
@@ -405,6 +408,8 @@ private formatBookingResponse(booking: any) {
     const isPendingApproval =
       (booking.status === 'PENDING' || booking.status === 'enattente') &&
       !booking.ownerConfirmedAt;
+
+    const isAwaitingPayment = booking.status === 'AWAITING_PAYMENT';
 
     return {
       id: booking.id,
@@ -438,6 +443,7 @@ private formatBookingResponse(booking: any) {
       ownerConfirmedAt: booking.ownerConfirmedAt,
       isConfirmed: !!booking.ownerConfirmedAt,
       isPendingApproval: Boolean(isPendingApproval),
+      isAwaitingPayment: Boolean(isAwaitingPayment),
 
       // --- INFOS TEMPORELLES ---
       checkInDate: booking.startDate,

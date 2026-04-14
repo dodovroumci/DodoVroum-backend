@@ -300,6 +300,7 @@ export class OffersService {
         status: {
           in: [
             'PENDING',
+            'AWAITING_PAYMENT',
             'CONFIRMED',
             'CONFIRMEE',
             'CHECKIN_CLIENT',

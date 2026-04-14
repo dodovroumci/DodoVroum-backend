@@ -34,7 +34,7 @@ export class AdminService {
       this.prisma.booking.count({
         where: {
           status: {
-            in: ['PENDING', 'CONFIRMEE', 'CHECKIN_CLIENT', 'CHECKIN_PROPRIO', 'EN_COURS_SEJOUR'],
+            in: ['PENDING', 'AWAITING_PAYMENT', 'CONFIRMEE', 'CHECKIN_CLIENT', 'CHECKIN_PROPRIO', 'EN_COURS_SEJOUR'],
           },
         },
       }),

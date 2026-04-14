@@ -171,7 +171,7 @@ model Booking {
   startDate        DateTime
   endDate          DateTime
   totalPrice       Float
-  status           BookingStatus @default(PENDING)
+  status           BookingStatus @default(AWAITING_PAYMENT)
   notes            String?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
@@ -360,6 +360,8 @@ enum VehicleType {
 }
 
 enum BookingStatus {
+  /// Brouillon : en attente d’action de paiement (pas encore une réservation « réelle » côté dashboard)
+  AWAITING_PAYMENT
   PENDING
   /// Paiement en ligne reçu (ex. GeniusPay) — avant confirmation propriétaire si besoin
   PAID

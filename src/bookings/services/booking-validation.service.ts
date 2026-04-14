@@ -117,7 +117,14 @@ export class BookingValidationService {
         {
           OR: [
             { status: { in: alwaysBlock } },
-            { AND: [{ status: BookingStatus.PENDING }, { createdAt: { gte: pendingSince } }] },
+            {
+              AND: [
+                {
+                  status: { in: [BookingStatus.PENDING, BookingStatus.AWAITING_PAYMENT] },
+                },
+                { createdAt: { gte: pendingSince } },
+              ],
+            },
           ],
         },
         {

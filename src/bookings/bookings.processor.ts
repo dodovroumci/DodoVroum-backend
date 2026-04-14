@@ -21,8 +21,7 @@ export class BookingsProcessor {
     try {
       const result = await this.prisma.booking.updateMany({
         where: {
-          // On cible uniquement le statut officiel PENDING de Prisma
-          status: BookingStatus.PENDING,
+          status: { in: [BookingStatus.PENDING, BookingStatus.AWAITING_PAYMENT] },
           createdAt: { lte: expirationLimit },
           ownerConfirmedAt: null,
         },
