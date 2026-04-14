@@ -371,6 +371,7 @@ private formatBookingResponse(booking: any) {
       vehicle: booking.vehicle ? {
         id: booking.vehicle.id,
         titre: `${booking.vehicle.brand} ${booking.vehicle.model}`,
+        pricePerDay: booking.vehicle.pricePerDay,
         proprietaireId: booking.vehicle.ownerId,
         imageUrl: this.getFirstImage(booking.vehicle.images),
       } : null,
