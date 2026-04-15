@@ -34,7 +34,11 @@ export class PaymentsService {
    * @param bookingId - Reference de la réservation
    * @param userId - ID de l'initiateur
    */
-  async initializeGeniusPayPayment(bookingId: string, userId: string) {
+  async initializeGeniusPayPayment(
+    bookingId: string,
+    userId: string,
+    paymentType?: string,
+  ) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
       include: { user: true },
@@ -52,12 +56,23 @@ export class PaymentsService {
       orderBy: { createdAt: 'desc' },
     });
 
+    const type = paymentType?.toUpperCase() || 'FULL';
     const calculatedBaseAmount = pendingPayment?.baseAmount ?? booking.totalPrice;
-    const calculatedAmount = pendingPayment?.amount ?? booking.totalPrice;
+    const requestedAmount =
+      type === 'DEPOSIT' ? booking.totalPrice * 0.5 : booking.totalPrice;
+    const calculatedAmount = pendingPayment?.amount ?? requestedAmount;
     // Contrainte GeniusPay : minimum 200 XOF sur le montant effectivement encaissé.
     const amount = Math.max(Math.round(calculatedAmount), 200);
-    const baseAmount = Math.round(calculatedBaseAmount);
+    const baseAmount = Math.round(
+      pendingPayment?.baseAmount ?? (type === 'DEPOSIT' ? booking.totalPrice : calculatedBaseAmount),
+    );
     const fees = Math.max(Math.round(amount - baseAmount), 0);
+
+    if (type === 'DEPOSIT') {
+      this.logger.log(`💰 [ACOMPTE] Calcul 50% : ${amount} XOF (booking ${bookingId})`);
+    } else {
+      this.logger.log(`💳 [TOTAL] Paiement complet : ${amount} XOF (booking ${bookingId})`);
+    }
 
     const apiKey = this.config.get<string>('GENIUSPAY_API_KEY');
     const apiSecret = this.config.get<string>('GENIUSPAY_API_SECRET');

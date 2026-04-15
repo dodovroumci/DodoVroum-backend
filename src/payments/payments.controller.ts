@@ -38,9 +38,14 @@ export class PaymentsController { // <--- VÉRIFIE BIEN LE "export" ICI
   @HttpCode(HttpStatus.CREATED)
   initializeGeniusPay(
     @Param('bookingId') bookingId: string,
+    @Body() body: { paymentType?: string },
     @Request() req: any,
   ) {
-    return this.paymentsService.initializeGeniusPayPayment(bookingId, req.user.id);
+    return this.paymentsService.initializeGeniusPayPayment(
+      bookingId,
+      req.user.id,
+      body?.paymentType,
+    );
   }
 
   @Get('status/:id')
