@@ -26,12 +26,12 @@ export class BookingsProcessor {
           ownerConfirmedAt: null,
         },
         data: { 
-          status: BookingStatus.CANCELLED 
+          status: BookingStatus.EXPIRED 
         },
       });
 
       if (result.count > 0) {
-        this.logger.log(`[AUTO-EXPIRATION] ${result.count} réservations annulées.`);
+        this.logger.log(`[AUTO-EXPIRATION] ${result.count} réservations passées en EXPIRED.`);
       }
     } catch (error) {
       this.logger.error(`[CRON_ERROR] ${error.message}`);

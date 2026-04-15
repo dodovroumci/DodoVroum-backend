@@ -19,12 +19,12 @@ export class BookingCleanupService {
         createdAt: { lt: fiveMinutesAgo },
       },
       data: {
-        status: BookingStatus.CANCELLED,
+        status: BookingStatus.EXPIRED,
       },
     });
 
     if (expired.count > 0) {
-      this.logger.log(`🧹 ${expired.count} réservation(s) expirée(s) annulée(s).`);
+      this.logger.log(`🧹 ${expired.count} réservation(s) expirée(s) marquée(s) EXPIRED.`);
     }
   }
 }

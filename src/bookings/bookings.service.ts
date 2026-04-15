@@ -119,6 +119,7 @@ export class BookingsService {
 
   private readonly rescheduleBlockedStatuses: BookingStatus[] = [
     BookingStatus.CANCELLED,
+    BookingStatus.EXPIRED,
     BookingStatus.COMPLETED,
     BookingStatus.TERMINEE,
     BookingStatus.EN_COURS_SEJOUR,
@@ -424,6 +425,7 @@ private formatBookingResponse(booking: any) {
       'EN_COURS_SEJOUR': 'enCoursSejour',
       'COMPLETED': 'terminee',
       'CANCELLED': 'cancelled',
+      'EXPIRED': 'expired',
     };
 
     const payments = booking.payments || [];
