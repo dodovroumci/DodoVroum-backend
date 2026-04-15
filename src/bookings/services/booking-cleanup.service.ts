@@ -10,21 +10,29 @@ export class BookingCleanupService {
   constructor(private readonly prisma: PrismaService) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
-  async cleanupExpiredBookings(): Promise<void> {
+  async handleExpiredBookings(): Promise<void> {
+    this.logger.log('🧹 Scan des réservations expirées en cours...');
+
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
-    const expired = await this.prisma.booking.updateMany({
-      where: {
-        status: BookingStatus.PENDING,
-        createdAt: { lt: fiveMinutesAgo },
-      },
-      data: {
-        status: BookingStatus.EXPIRED,
-      },
-    });
+    try {
+      const expired = await this.prisma.booking.updateMany({
+        where: {
+          status: BookingStatus.AWAITING_PAYMENT,
+          createdAt: { lt: fiveMinutesAgo },
+        },
+        data: {
+          status: BookingStatus.EXPIRED,
+        },
+      });
 
-    if (expired.count > 0) {
-      this.logger.log(`🧹 ${expired.count} réservation(s) expirée(s) marquée(s) EXPIRED.`);
+      if (expired.count > 0) {
+        this.logger.warn(
+          `✅ Nettoyage terminé : ${expired.count} réservations passées en EXPIRED.`,
+        );
+      }
+    } catch (error) {
+      this.logger.error('❌ Erreur lors du nettoyage des réservations :', error.message);
     }
   }
 }
