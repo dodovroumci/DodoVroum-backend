@@ -42,8 +42,22 @@ export class PaymentsService {
 
     if (!booking) throw new NotFoundException('Réservation introuvable.');
 
-    // Contrainte GeniusPay : minimum 200 XOF
-    const amount = Math.max(Math.round(booking.totalPrice), 200);
+    // On réutilise en priorité le paiement PENDING déjà calculé (acompte vs total).
+    const pendingPayment = await this.prisma.payment.findFirst({
+      where: {
+        bookingId,
+        userId,
+        status: PaymentStatus.PENDING,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const calculatedBaseAmount = pendingPayment?.baseAmount ?? booking.totalPrice;
+    const calculatedAmount = pendingPayment?.amount ?? booking.totalPrice;
+    // Contrainte GeniusPay : minimum 200 XOF sur le montant effectivement encaissé.
+    const amount = Math.max(Math.round(calculatedAmount), 200);
+    const baseAmount = Math.round(calculatedBaseAmount);
+    const fees = Math.max(Math.round(amount - baseAmount), 0);
 
     const apiKey = this.config.get<string>('GENIUSPAY_API_KEY');
     const apiSecret = this.config.get<string>('GENIUSPAY_API_SECRET');
@@ -81,20 +95,37 @@ export class PaymentsService {
       if (result.success && result.data) {
         this.logger.log(`✅ [GENIUSPAY] Lien généré: ${result.data.checkout_url}`);
 
-        // Persistance de la tentative de paiement
-        const payment = await this.prisma.payment.create({
-          data: {
-            amount: amount,
-            baseAmount: amount,
-            fees: 0,
-            currency: 'XOF',
-            status: PaymentStatus.PENDING,
-            method: PaymentMethod.CARD, // Sera mis à jour par le webhook selon le channel réel
-            userId: booking.userId,
-            bookingId: booking.id,
-            transactionId: result.data.reference.toString(),
-          },
-        });
+        const reference = result.data.reference.toString();
+
+        // Persistance de la tentative de paiement :
+        // - met à jour le paiement PENDING existant s'il existe (évite les doublons)
+        // - sinon crée une nouvelle tentative
+        const payment = pendingPayment
+          ? await this.prisma.payment.update({
+              where: { id: pendingPayment.id },
+              data: {
+                amount,
+                baseAmount,
+                fees,
+                currency: 'XOF',
+                status: PaymentStatus.PENDING,
+                method: PaymentMethod.CARD, // Sera mis à jour par le webhook selon le channel réel
+                transactionId: reference,
+              },
+            })
+          : await this.prisma.payment.create({
+              data: {
+                amount,
+                baseAmount,
+                fees,
+                currency: 'XOF',
+                status: PaymentStatus.PENDING,
+                method: PaymentMethod.CARD, // Sera mis à jour par le webhook selon le channel réel
+                userId: booking.userId,
+                bookingId: booking.id,
+                transactionId: reference,
+              },
+            });
 
         return {
           checkoutUrl: result.data.checkout_url,
