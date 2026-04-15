@@ -133,8 +133,9 @@ export class PaymentsService {
       return { status: 'already_processed' };
     }
 
-    // Validation du succès (Event-driven)
-    if (body.event === 'payment.success' || body.data?.status === 'success') {
+    // Validation du succès (Event-driven), insensible à la casse côté PSP
+    const receivedStatus = body.data?.status?.toString().toLowerCase();
+    if (body.event === 'payment.success' || receivedStatus === 'success') {
       try {
         await this.prisma.$transaction([
           // 1. Marquer le paiement comme complété
