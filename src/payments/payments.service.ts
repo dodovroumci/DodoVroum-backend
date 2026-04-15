@@ -202,4 +202,25 @@ export class PaymentsService {
   async create(dto: CreatePaymentDto, userId: string) {
     return this.prisma.payment.create({ data: { ...dto, userId } as any });
   }
+
+  async checkPaymentStatus(bookingId: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: { id: true, status: true },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Réservation introuvable.');
+    }
+
+    const isPaid =
+      booking.status === BookingStatus.PAID ||
+      booking.status === BookingStatus.CONFIRMED;
+
+    return {
+      bookingId: booking.id,
+      status: booking.status,
+      paid: isPaid,
+    };
+  }
 }

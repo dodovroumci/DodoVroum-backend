@@ -43,6 +43,13 @@ export class PaymentsController { // <--- VÉRIFIE BIEN LE "export" ICI
     return this.paymentsService.initializeGeniusPayPayment(bookingId, req.user.id);
   }
 
+  @Get('status/:id')
+  @ApiOperation({ summary: 'Vérifier le statut de paiement d’une réservation' })
+  @ApiResponse({ status: 200, description: 'Statut de paiement récupéré' })
+  checkPaymentStatus(@Param('id') id: string) {
+    return this.paymentsService.checkPaymentStatus(id);
+  }
+
   @Get()
   findAll() { return this.paymentsService.findAll(); }
 
