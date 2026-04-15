@@ -1,3 +1,7 @@
+/**
+ * @file booking-cleanup.service.ts
+ * @stack Next.js 14 / NestJS / Prisma
+ */
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { BookingStatus } from '@prisma/client';
@@ -9,17 +13,21 @@ export class BookingCleanupService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * @description Scan toutes les minutes pour expirer les réservations non payées après 15 min.
+   * @rule Golden Rule: Toujours vérifier le statut AWAITING_PAYMENT uniquement.
+   */
   @Cron(CronExpression.EVERY_MINUTE)
   async handleExpiredBookings(): Promise<void> {
-    this.logger.log('🧹 Scan des réservations expirées en cours...');
+    this.logger.log('🧹 Scan des réservations expirées (Marge: 15min) en cours...');
 
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const expirationThreshold = new Date(Date.now() - 15 * 60 * 1000);
 
     try {
       const expired = await this.prisma.booking.updateMany({
         where: {
           status: BookingStatus.AWAITING_PAYMENT,
-          createdAt: { lt: fiveMinutesAgo },
+          createdAt: { lt: expirationThreshold },
         },
         data: {
           status: BookingStatus.EXPIRED,
@@ -32,7 +40,8 @@ export class BookingCleanupService {
         );
       }
     } catch (error) {
-      this.logger.error('❌ Erreur lors du nettoyage des réservations :', error.message);
+      const stack = error instanceof Error ? error.stack : String(error);
+      this.logger.error('❌ Erreur lors du nettoyage des réservations', stack);
     }
   }
 }
