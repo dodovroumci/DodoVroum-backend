@@ -161,14 +161,21 @@ export class PaymentsService {
   }
 
   /**
-   * Webhook: Traitement asynchrone des confirmations de paiement
+   * Confirmation GeniusPay : met à jour le paiement et la réservation si le statut indique un succès.
+   * @param reference - Référence alignée sur `payment.transactionId` (champs plats ou `data.reference` côté PSP).
+   * @param status - ex. SUCCESSFUL, COMPLETED, success (voir {@link isSuccessfulPaymentStatus}).
+   * @param channel - Canal GeniusPay pour mapper {@link PaymentMethod} (optionnel).
    */
-  async handleGeniusPayWebhook(body: any, signature?: string) {
-    this.logger.log(`📥 [WEBHOOK] Payload reçu: ${JSON.stringify(body)}`);
-
-    const reference = body.data?.reference?.toString();
-    if (!reference) return { status: 'error', message: 'Missing reference' };
-
+  async validatePayment(
+    reference: string,
+    status?: string,
+    channel?: string,
+  ): Promise<
+    | { status: 'success' }
+    | { status: 'not_found' }
+    | { status: 'already_processed' }
+    | { status: 'ignored' }
+  > {
     const payment = await this.prisma.payment.findFirst({
       where: { transactionId: reference },
     });
@@ -178,40 +185,44 @@ export class PaymentsService {
       return { status: 'not_found' };
     }
 
-    // Idempotence: Ne pas traiter deux fois
     if (payment.status === PaymentStatus.COMPLETED) {
       return { status: 'already_processed' };
     }
 
-    // Validation du succès (Event-driven), insensible à la casse côté PSP
-    const receivedStatus = body.data?.status?.toString().toLowerCase();
-    if (body.event === 'payment.success' || receivedStatus === 'success') {
-      try {
-        await this.prisma.$transaction([
-          // 1. Marquer le paiement comme complété
-          this.prisma.payment.update({
-            where: { id: payment.id },
-            data: { 
-              status: PaymentStatus.COMPLETED,
-              method: this.mapChannelToMethod(body.data?.channel)
-            },
-          }),
-          // 2. Valider la réservation
-          this.prisma.booking.update({
-            where: { id: payment.bookingId },
-            data: { status: BookingStatus.PAID },
-          }),
-        ]);
-
-        this.logger.log(`💰 [WEBHOOK_SUCCESS] Booking ${payment.bookingId} confirmé.`);
-        return { status: 'success' };
-      } catch (e) {
-        this.logger.error(`❌ [WEBHOOK_DB_FAILURE] ${e.message}`);
-        throw e;
-      }
+    if (!this.isSuccessfulPaymentStatus(status)) {
+      return { status: 'ignored' };
     }
 
-    return { status: 'ignored' };
+    try {
+      await this.prisma.$transaction([
+        this.prisma.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: PaymentStatus.COMPLETED,
+            method: this.mapChannelToMethod(channel),
+          },
+        }),
+        this.prisma.booking.update({
+          where: { id: payment.bookingId },
+          data: { status: BookingStatus.PAID },
+        }),
+      ]);
+
+      this.logger.log(`💰 [WEBHOOK_SUCCESS] Booking ${payment.bookingId} confirmé.`);
+      return { status: 'success' };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.error(`❌ [WEBHOOK_DB_FAILURE] ${msg}`);
+      throw e;
+    }
+  }
+
+  private isSuccessfulPaymentStatus(status?: string): boolean {
+    if (status == null || status === '') {
+      return false;
+    }
+    const s = status.toString().toLowerCase().trim();
+    return ['success', 'successful', 'completed', 'paid'].includes(s);
   }
 
   /**
