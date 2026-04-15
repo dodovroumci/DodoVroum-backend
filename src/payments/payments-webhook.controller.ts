@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, HttpCode, HttpStatus, Logger, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Public } from '../auth/decorators/public.decorator';
 import { PaymentsService } from './payments.service';
@@ -12,12 +12,10 @@ import { GeniusPayWebhookIpGuard } from './guards/geniuspay-webhook-ip.guard';
 @ApiTags('payments')
 @Controller('payments')
 export class PaymentsWebhookController {
-  private readonly logger = new Logger(PaymentsWebhookController.name);
-
   constructor(private readonly paymentsService: PaymentsService) {}
 
   @Public()
-  @Post(['geniuspay', 'webhooks/geniuspay'])
+  @Post('geniuspay')
   @UseGuards(GeniusPayWebhookIpGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -26,14 +24,11 @@ export class PaymentsWebhookController {
       'Référence possible : reference, order_id, payment_reference ou data.reference. ' +
       'IPs listées dans GENIUSPAY_WEBHOOK_ALLOWED_IPS. Derrière un reverse proxy : TRUST_PROXY=true.',
   })
-  async handleWebhook(
-    @Body() body: Record<string, unknown>,
-    @Headers('x-geniuspay-signature') _signature?: string,
-  ) {
-    // GeniusPay envoie souvent la référence dans 'reference' ou 'order_id'
-    this.logger.log(`📦 Webhook reçu: ${JSON.stringify(body)}`);
+  async handleWebhook(@Body() body: any) {
+    console.log('--- [WEBHOOK RECEIVE] ---');
+    console.log(body); // Visible dans les logs PM2
 
-    const data = body['data'] as Record<string, unknown> | undefined;
+    const data = body?.data as Record<string, unknown> | undefined;
     const reference =
       (body['reference'] as string | undefined) ??
       (body['order_id'] as string | undefined) ??
