@@ -13,7 +13,9 @@ import * as https from 'https';
  */
 @Injectable()
 export class PaymentsService {
-  private readonly logger = new Logger('PaymentsService');
+  private readonly logger = new Logger(PaymentsService.name);
+  private readonly DEPOSIT_PERCENTAGE = 0.3;
+  private readonly MIN_AMOUNT_XOF = 200;
   
   // Endpoint validé pour éviter les redirections 301/302
   private readonly GENIUS_API_URL = 'https://pay.genius.ci/public/api/v1/merchant/payments';
@@ -57,19 +59,21 @@ export class PaymentsService {
     });
 
     const type = paymentType?.toUpperCase() || 'FULL';
-    const calculatedBaseAmount = pendingPayment?.baseAmount ?? booking.totalPrice;
     const requestedAmount =
-      type === 'DEPOSIT' ? booking.totalPrice * 0.5 : booking.totalPrice;
-    const calculatedAmount = pendingPayment?.amount ?? requestedAmount;
-    // Contrainte GeniusPay : minimum 200 XOF sur le montant effectivement encaissé.
-    const amount = Math.max(Math.round(calculatedAmount), 200);
-    const baseAmount = Math.round(
-      pendingPayment?.baseAmount ?? (type === 'DEPOSIT' ? booking.totalPrice : calculatedBaseAmount),
-    );
+      type === 'DEPOSIT'
+        ? Math.ceil(booking.totalPrice * this.DEPOSIT_PERCENTAGE)
+        : Math.ceil(booking.totalPrice);
+    // Si un type est explicitement demandé, il prime.
+    // Sinon on peut réutiliser le dernier PENDING pour éviter les écarts côté client.
+    const calculatedAmount = paymentType ? requestedAmount : pendingPayment?.amount ?? requestedAmount;
+    const amount = Math.max(Math.round(calculatedAmount), this.MIN_AMOUNT_XOF);
+    const baseAmount = Math.ceil(booking.totalPrice);
     const fees = Math.max(Math.round(amount - baseAmount), 0);
 
     if (type === 'DEPOSIT') {
-      this.logger.log(`💰 [ACOMPTE] Calcul 50% : ${amount} XOF (booking ${bookingId})`);
+      this.logger.log(
+        `💰 [ACOMPTE 30%] Calcul : ${amount} XOF (Total: ${booking.totalPrice}) (booking ${bookingId})`,
+      );
     } else {
       this.logger.log(`💳 [TOTAL] Paiement complet : ${amount} XOF (booking ${bookingId})`);
     }
