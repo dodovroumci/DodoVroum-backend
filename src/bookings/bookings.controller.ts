@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { BookingStatus } from '@prisma/client';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
@@ -106,6 +107,15 @@ export class BookingsController {
   @ApiResponse({ status: 404, description: 'Réservation non trouvée' })
   reject(@Param('id') id: string, @Body() body?: { reason?: string }) {
     return this.bookingsService.reject(id, body?.reason);
+  }
+
+  @Patch(':id/confirm')
+  @UseGuards(JwtAuthGuard, BookingOwnerOrAdminGuard)
+  @ApiOperation({ summary: 'Confirmer une réservation' })
+  @ApiResponse({ status: 200, description: 'Réservation confirmée avec succès' })
+  @ApiResponse({ status: 404, description: 'Réservation non trouvée' })
+  confirmBooking(@Param('id') id: string) {
+    return this.bookingsService.updateStatus(id, BookingStatus.CONFIRMED);
   }
 
   @Patch(':id/confirm-key-retrieval')

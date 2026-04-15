@@ -284,6 +284,32 @@ export class BookingsService {
     return this.formatBookingResponse(updated);
   }
 
+  async updateStatus(id: string, status: BookingStatus) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id },
+      select: { id: true, userId: true },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Réservation non trouvée');
+    }
+
+    const updated = await this.prisma.booking.update({
+      where: { id },
+      data: {
+        status,
+        ...(status === BookingStatus.CONFIRMED ? { ownerConfirmedAt: new Date() } : {}),
+      },
+      include: this.getBookingInclude(),
+    });
+
+    if (status === BookingStatus.CONFIRMED) {
+      await this.sendBookingNotification(updated, updated.userId, 'APPROVED');
+    }
+
+    return this.formatBookingResponse(updated);
+  }
+
   async confirmKeyRetrieval(id: string, userId: string) {
     const updated = await this.prisma.booking.update({
       where: { id },
