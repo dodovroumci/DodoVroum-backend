@@ -405,11 +405,17 @@ private formatBookingResponse(booking: any) {
       .filter((p: any) => p.status === 'COMPLETED')
       .reduce((sum: number, p: any) => sum + p.amount, 0);
 
+    // Après paiement réussi (PAID), la réservation est en attente d'action propriétaire.
+    const normalizedStatus =
+      typeof booking.status === 'string' ? booking.status.toUpperCase() : booking.status;
+
     const isPendingApproval =
-      (booking.status === 'PENDING' || booking.status === 'enattente') &&
+      (normalizedStatus === BookingStatus.PENDING ||
+        normalizedStatus === BookingStatus.PAID ||
+        normalizedStatus === 'ENATTENTE') &&
       !booking.ownerConfirmedAt;
 
-    const isAwaitingPayment = booking.status === 'AWAITING_PAYMENT';
+    const isAwaitingPayment = normalizedStatus === BookingStatus.AWAITING_PAYMENT;
 
     return {
       id: booking.id,
