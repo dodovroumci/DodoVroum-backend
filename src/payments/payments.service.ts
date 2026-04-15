@@ -162,7 +162,7 @@ export class PaymentsService {
 
   /**
    * Confirmation GeniusPay : met à jour le paiement et la réservation si le statut indique un succès.
-   * @param reference - Référence alignée sur `payment.transactionId` (champs plats ou `data.reference` côté PSP).
+   * @param reference - ID de paiement, `transactionId` GeniusPay, ou ID de réservation (`bookingId`).
    * @param status - ex. SUCCESSFUL, COMPLETED, success (voir {@link isSuccessfulPaymentStatus}).
    * @param channel - Canal GeniusPay pour mapper {@link PaymentMethod} (optionnel).
    */
@@ -176,12 +176,30 @@ export class PaymentsService {
     | { status: 'already_processed' }
     | { status: 'ignored' }
   > {
-    const payment = await this.prisma.payment.findFirst({
-      where: { transactionId: reference },
+    // 1. Référence = ID de paiement (cuid)
+    let payment = await this.prisma.payment.findUnique({
+      where: { id: reference },
     });
 
+    // 2. Référence = transaction GeniusPay (stockée dans transactionId)
     if (!payment) {
-      this.logger.error(`❌ [WEBHOOK] Paiement ${reference} non trouvé en base.`);
+      payment = await this.prisma.payment.findFirst({
+        where: { transactionId: reference },
+      });
+    }
+
+    // 3. Référence = ID de réservation : dernier paiement lié
+    if (!payment) {
+      payment = await this.prisma.payment.findFirst({
+        where: { bookingId: reference },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
+    if (!payment) {
+      this.logger.warn(
+        `⚠️ [WEBHOOK] Référence inconnue (Payment ou Booking): ${reference}`,
+      );
       return { status: 'not_found' };
     }
 
