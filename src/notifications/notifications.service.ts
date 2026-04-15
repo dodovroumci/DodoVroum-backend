@@ -2,9 +2,27 @@ import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/commo
 import { PrismaService } from '../common/prisma/prisma.service';
 import { NotificationType } from '@prisma/client';
 
+export type PushStylePayload = {
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+};
+
 @Injectable()
 export class NotificationsService {
   constructor(private prisma: PrismaService) {}
+
+  /**
+   * Notification ciblée (in-app). Les champs `data` sont réservés à une future couche FCM (Firebase Admin SDK).
+   */
+  async sendToUser(userId: string, payload: PushStylePayload): Promise<void> {
+    await this.createNotification(
+      userId,
+      payload.title,
+      payload.body,
+      NotificationType.WARNING,
+    );
+  }
 
   /**
    * Crée une notification pour un utilisateur
