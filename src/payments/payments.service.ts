@@ -96,6 +96,8 @@ export class PaymentsService {
           },
           success_url: this.config.get('GENIUSPAY_SUCCESS_URL'),
           error_url: this.config.get('GENIUSPAY_CANCEL_URL'),
+          // GeniusPay webhook callback URL (utilisée pour envoyer les statuts de paiement)
+          webhook_url: 'https://api.dodovroum.com/api/payments/geniuspay',
         },
         {
           headers: {
