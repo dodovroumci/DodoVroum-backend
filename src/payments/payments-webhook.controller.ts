@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Logger, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Public } from '../auth/decorators/public.decorator';
 import { PaymentsService } from './payments.service';
@@ -12,6 +12,8 @@ import { GeniusPaySignatureGuard } from './guards/geniuspay-signature.guard';
 @ApiTags('payments')
 @Controller('payments')
 export class PaymentsWebhookController {
+  private readonly logger = new Logger('PaymentsWebhook');
+
   constructor(private readonly paymentsService: PaymentsService) {}
 
   @Public()
@@ -26,8 +28,9 @@ export class PaymentsWebhookController {
       'IPs listées dans GENIUSPAY_WEBHOOK_ALLOWED_IPS. Derrière un reverse proxy : TRUST_PROXY=true.',
   })
   async handleWebhook(@Body() body: any) {
-    console.log('--- [WEBHOOK RECEIVE] ---');
-    console.log(body); // Visible dans les logs PM2
+    // Journalisation minimale pour le tracking sans exposer de données client.
+    const orderId = body?.order_id ?? body?.payment_reference ?? body?.reference ?? 'N/A';
+    this.logger.log(`Webhook GeniusPay reçu (order_id=${orderId})`);
 
     const data = body?.data as Record<string, unknown> | undefined;
     const reference =

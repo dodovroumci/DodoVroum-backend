@@ -90,7 +90,7 @@ export class PaymentsService {
     };
 
     try {
-      this.logger.log(`🚀 [GENIUSPAY] Init: ${amount} XOF pour Booking ${bookingId}`);
+      // Initialisation du paiement GeniusPay
 
       const response = await axios.post(
         this.GENIUS_API_URL,
@@ -122,7 +122,7 @@ export class PaymentsService {
       const result = response.data;
 
       if (result.success && result.data) {
-        this.logger.log(`✅ [GENIUSPAY] Lien généré: ${result.data.checkout_url}`);
+        // Lien de redirection renvoyé par GeniusPay
 
         const reference = result.data.reference.toString();
 
