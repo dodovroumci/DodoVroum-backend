@@ -9,13 +9,16 @@ import {
   UseGuards, 
   Request, 
   HttpCode, 
-  HttpStatus 
+  HttpStatus,
+  Query,
+  Res,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { UpdatePaymentDto } from './dto/update-payment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('payments')
 @ApiBearerAuth()
@@ -46,6 +49,20 @@ export class PaymentsController { // <--- VÉRIFIE BIEN LE "export" ICI
       req.user.id,
       body?.paymentType,
     );
+  }
+
+  @Public()
+  @Get('redirect/success')
+  handleSuccessRedirect(@Query('bookingId') bookingId: string, @Res() res: any) {
+    const deepLink = `dodovroum://payments/callback?status=success&bookingId=${bookingId}`;
+    return res.redirect(deepLink);
+  }
+
+  @Public()
+  @Get('redirect/cancel')
+  handleCancelRedirect(@Query('bookingId') bookingId: string, @Res() res: any) {
+    const deepLink = `dodovroum://payments/callback?status=cancel&bookingId=${bookingId}`;
+    return res.redirect(deepLink);
   }
 
   @Get('status/:id')
