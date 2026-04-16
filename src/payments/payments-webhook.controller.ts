@@ -17,7 +17,7 @@ export class PaymentsWebhookController {
   @Public()
   @Post('geniuspay')
   // @UseGuards(GeniusPayWebhookIpGuard)
-  @UseGuards(GeniusPaySignatureGuard)
+  // @UseGuards(GeniusPaySignatureGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Webhook GeniusPay — confirmation de paiement',
