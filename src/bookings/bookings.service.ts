@@ -444,7 +444,6 @@ private formatBookingResponse(booking: any) {
       !booking.ownerConfirmedAt;
 
     const isAwaitingPayment = normalizedStatus === BookingStatus.AWAITING_PAYMENT;
-    const displayStatus = this.mapBookingStatus(booking);
 
     return {
       id: booking.id,
@@ -471,7 +470,6 @@ private formatBookingResponse(booking: any) {
       totalPrice: booking.totalPrice,
       totalPaid,
       status: statusMap[booking.status] || booking.status.toLowerCase(),
-      displayStatus,
       
       // --- CHAMPS DE SUIVI POUR LE STEPPER ---
       keyRetrievedAt: booking.keyRetrievedAt,
@@ -488,39 +486,6 @@ private formatBookingResponse(booking: any) {
       clientName: booking.user ? `${booking.user.firstName} ${booking.user.lastName}` : 'Client Inconnu',
       createdAt: booking.createdAt
     };
-  }
-
-  /**
-   * Aligne l'affichage du statut avec la logique de priorité utilisée côté réservations.
-   */
-  private mapBookingStatus(booking: any): string {
-    const normalizedStatus =
-      typeof booking?.status === 'string' ? booking.status.toUpperCase() : booking?.status;
-
-    // 1) Priorité haute : états terminaux
-    if (normalizedStatus === BookingStatus.EXPIRED) return 'Expirée';
-    if (normalizedStatus === BookingStatus.CANCELLED) return 'Annulée';
-
-    // 2) Confirmation propriétaire
-    if (booking?.ownerConfirmedAt) {
-      return 'Confirmée';
-    }
-
-    // 3) Paiement validé mais pas encore confirmé
-    const hasCompletedPayment = Array.isArray(booking?.payments)
-      ? booking.payments.some((p: any) => {
-          const paymentStatus =
-            typeof p?.status === 'string' ? p.status.toUpperCase() : p?.status;
-          return paymentStatus === 'COMPLETED' || paymentStatus === 'SUCCESS';
-        })
-      : false;
-
-    if (normalizedStatus === BookingStatus.PAID || hasCompletedPayment) {
-      return 'Payée';
-    }
-
-    // 4) Fallback
-    return 'En attente';
   }
 
   private async sendBookingNotification(booking: any, userId: string, type: string, reason?: string) {

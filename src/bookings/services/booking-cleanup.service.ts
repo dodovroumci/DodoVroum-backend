@@ -27,9 +27,7 @@ export class BookingCleanupService {
 
     const toExpire = await this.prisma.booking.findMany({
       where: {
-        // Sécurité: une réservation payée (PAID/CONFIRMED) ne doit jamais expirer automatiquement ici.
         status: BookingStatus.AWAITING_PAYMENT,
-        NOT: { status: { in: [BookingStatus.PAID, BookingStatus.CONFIRMED] } },
         createdAt: { lt: threshold },
       },
       select: { id: true, userId: true },
@@ -46,7 +44,6 @@ export class BookingCleanupService {
         where: {
           id: { in: bookingIds },
           status: BookingStatus.AWAITING_PAYMENT,
-          NOT: { status: { in: [BookingStatus.PAID, BookingStatus.CONFIRMED] } },
         },
         data: { status: BookingStatus.EXPIRED },
       });
