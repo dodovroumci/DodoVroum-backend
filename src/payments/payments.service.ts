@@ -80,6 +80,14 @@ export class PaymentsService {
 
     const apiKey = this.config.get<string>('GENIUSPAY_API_KEY');
     const apiSecret = this.config.get<string>('GENIUSPAY_API_SECRET');
+    const successUrlBase = this.config.get<string>('GENIUSPAY_SUCCESS_URL');
+    const cancelUrlBase = this.config.get<string>('GENIUSPAY_CANCEL_URL');
+
+    const appendBookingId = (url?: string) => {
+      if (!url) return url;
+      const separator = url.includes('?') ? '&' : '?';
+      return `${url}${separator}bookingId=${booking.id}`;
+    };
 
     try {
       this.logger.log(`🚀 [GENIUSPAY] Init: ${amount} XOF pour Booking ${bookingId}`);
@@ -94,8 +102,8 @@ export class PaymentsService {
             name: `${booking.user.firstName || ''} ${booking.user.lastName || ''}`.trim() || 'Client DodoVroum',
             email: booking.user.email,
           },
-          success_url: this.config.get('GENIUSPAY_SUCCESS_URL'),
-          error_url: this.config.get('GENIUSPAY_CANCEL_URL'),
+          success_url: appendBookingId(successUrlBase),
+          error_url: appendBookingId(cancelUrlBase),
           // GeniusPay webhook callback URL (utilisée pour envoyer les statuts de paiement)
           webhook_url: 'https://api.dodovroum.com/api/payments/geniuspay',
         },
