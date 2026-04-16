@@ -51,16 +51,27 @@ export class PaymentsController { // <--- VÉRIFIE BIEN LE "export" ICI
     );
   }
 
-  @Public()
+  @Public() // Indispensable pour que GeniusPay puisse y accéder
   @Get('redirect/success')
-  handleSuccessRedirect(@Query('bookingId') bookingId: string, @Res() res: any) {
+  async handleSuccessRedirect(
+    @Query('reference') reference: string,
+    @Query('bookingId') bookingId: string,
+    @Res() res: any,
+  ) {
+    // Le bookingId est le paramètre critique pour reconnecter la réservation côté Flutter
+    void reference;
     const deepLink = `dodovroum://payments/callback?status=success&bookingId=${bookingId}`;
     return res.redirect(deepLink);
   }
 
-  @Public()
+  @Public() // Indispensable pour que GeniusPay puisse y accéder
   @Get('redirect/cancel')
-  handleCancelRedirect(@Query('bookingId') bookingId: string, @Res() res: any) {
+  async handleCancelRedirect(
+    @Query('reference') reference: string,
+    @Query('bookingId') bookingId: string,
+    @Res() res: any,
+  ) {
+    void reference;
     const deepLink = `dodovroum://payments/callback?status=cancel&bookingId=${bookingId}`;
     return res.redirect(deepLink);
   }
