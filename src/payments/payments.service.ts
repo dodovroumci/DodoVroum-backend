@@ -176,30 +176,20 @@ export class PaymentsService {
     | { status: 'already_processed' }
     | { status: 'ignored' }
   > {
-    // 1. Référence = ID de paiement (cuid)
-    let payment = await this.prisma.payment.findUnique({
-      where: { id: reference },
+    // 1. Recherche ultra-large : par ID Prisma, par transactionId GeniusPay, ou par bookingId
+    const payment = await this.prisma.payment.findFirst({
+      where: {
+        OR: [
+          { id: reference }, // Cas ID Prisma
+          { transactionId: reference }, // Cas ID GeniusPay (MTX-...)
+          { bookingId: reference }, // Cas secours BookingID
+        ],
+      },
+      include: { booking: true },
     });
 
-    // 2. Référence = transaction GeniusPay (stockée dans transactionId)
     if (!payment) {
-      payment = await this.prisma.payment.findFirst({
-        where: { transactionId: reference },
-      });
-    }
-
-    // 3. Référence = ID de réservation : dernier paiement lié
-    if (!payment) {
-      payment = await this.prisma.payment.findFirst({
-        where: { bookingId: reference },
-        orderBy: { createdAt: 'desc' },
-      });
-    }
-
-    if (!payment) {
-      this.logger.warn(
-        `⚠️ [WEBHOOK] Référence inconnue (Payment ou Booking): ${reference}`,
-      );
+      this.logger.warn(`⚠️ [WEBHOOK] Référence inconnue: ${reference}`);
       return { status: 'not_found' };
     }
 
