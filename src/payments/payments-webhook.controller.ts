@@ -1,7 +1,8 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Public } from '../auth/decorators/public.decorator';
 import { PaymentsService } from './payments.service';
+import { GeniusPaySignatureGuard } from './guards/geniuspay-signature.guard';
 
 /**
  * Webhooks GeniusPay : pas de JWT (appel serveur à serveur).
@@ -16,6 +17,7 @@ export class PaymentsWebhookController {
   @Public()
   @Post('geniuspay')
   // @UseGuards(GeniusPayWebhookIpGuard)
+  @UseGuards(GeniusPaySignatureGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Webhook GeniusPay — confirmation de paiement',
