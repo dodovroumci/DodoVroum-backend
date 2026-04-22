@@ -37,15 +37,14 @@ export class VehiclesController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   async create(@Body() createVehicleDto: any, @GetUser() user: any) {
-    // Nettoyage défensif: on ignore tout owner injecté par le client/interceptor.
-    if (createVehicleDto.ownerId) {
-      delete createVehicleDto.ownerId;
-    }
-    if (createVehicleDto.proprietaireId) {
-      delete createVehicleDto.proprietaireId;
-    }
+    // Nettoyage "guerilla": on exclut explicitement les identifiants propriétaire entrants.
+    const { ownerId, proprietaireId, ...cleanData } = createVehicleDto;
+    void ownerId;
+    void proprietaireId;
 
-    return this.vehiclesService.create(createVehicleDto, user);
+    this.logger.debug(`Create vehicle payload keys: ${Object.keys(cleanData).join(',')}`);
+
+    return this.vehiclesService.create(cleanData, user);
   }
 
   @Get('types')

@@ -1,5 +1,5 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsNumber, IsOptional, IsArray, IsBoolean, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsOptional, IsArray, IsBoolean, Min, Allow } from 'class-validator';
 
 /**
  * DTO pour la création de véhicule.
@@ -80,14 +80,14 @@ export class CreateVehicleDto {
   features?: string[];
 
   @ApiProperty({ example: 'uuid-proprietaire', required: false })
+  @Allow()
   @IsOptional()
-  @IsString()
-  ownerId?: string;
+  ownerId?: any;
 
   @ApiProperty({ example: 'uuid-proprietaire', required: false })
+  @Allow()
   @IsOptional()
-  @IsString()
-  proprietaireId?: string;
+  proprietaireId?: any;
 
   @ApiProperty({ example: true, default: true })
   @IsOptional()
