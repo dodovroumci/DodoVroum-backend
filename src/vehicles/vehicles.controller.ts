@@ -36,7 +36,15 @@ export class VehiclesController {
   @Post()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  async create(@Body() createVehicleDto: CreateVehicleDto, @GetUser() user: any) {
+  async create(@Body() createVehicleDto: any, @GetUser() user: any) {
+    // Nettoyage défensif: on ignore tout owner injecté par le client/interceptor.
+    if (createVehicleDto.ownerId) {
+      delete createVehicleDto.ownerId;
+    }
+    if (createVehicleDto.proprietaireId) {
+      delete createVehicleDto.proprietaireId;
+    }
+
     return this.vehiclesService.create(createVehicleDto, user);
   }
 
