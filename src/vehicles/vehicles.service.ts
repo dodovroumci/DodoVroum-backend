@@ -173,28 +173,33 @@ export class VehiclesService {
 
   
 
-    async findAll(query: VehiclesQueryDto) {
-    const { proprietaireId, type, search } = query;
-    const andFilters: Prisma.VehicleWhereInput[] = [];
+  async findAll(query: any, proprietaireId?: string) {
+    const { search, type, brand } = query;
+    const where: any = {};
 
-    if (proprietaireId) andFilters.push({ ownerId: proprietaireId });
-    if (type) andFilters.push({ type: this.normalizeVehicleType(type) });
+    // 1. Filtre propriétaire (prioritaire)
+    if (proprietaireId) {
+      where.ownerId = proprietaireId;
+    }
 
+    // 2. Filtres optionnels
+    if (type) where.type = type;
+    if (brand) where.brand = { contains: brand, mode: 'insensitive' };
+
+    // 3. Recherche textuelle
     if (search) {
-      andFilters.push({
-        OR: [
-          { brand: { contains: search } },
-          { model: { contains: search } },
-          { title: { contains: search } },
-        ],
-      });
+      where.OR = [
+        { brand: { contains: search, mode: 'insensitive' } },
+        { model: { contains: search, mode: 'insensitive' } },
+        { plateNumber: { contains: search, mode: 'insensitive' } },
+      ];
     }
 
     const vehicles = await this.prisma.vehicle.findMany({
-      where: andFilters.length > 0 ? { AND: andFilters } : {},
-      include: { 
-        owner: { select: { id: true, firstName: true, avatar: true } },
-        reviews: true // ✅ Crucial pour le calcul de la note
+      where,
+      include: {
+        owner: true,
+        reviews: true,
       },
       orderBy: { createdAt: 'desc' },
     });

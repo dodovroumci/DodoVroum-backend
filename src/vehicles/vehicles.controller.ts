@@ -29,8 +29,12 @@ export class VehiclesController {
   constructor(private readonly vehiclesService: VehiclesService) {}
 
   @Get()
-  async findAll(@Query() query: VehiclesQueryDto) {
-    return this.vehiclesService.findAll(query);
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async findAll(@Query() query: any, @GetUser() user: any) {
+    // Si l'utilisateur n'est pas ADMIN, il ne peut voir que ses propres véhicules.
+    const ownerId = user.role !== 'ADMIN' ? user.id : query.proprietaireId;
+    return this.vehiclesService.findAll(query, ownerId);
   }
 
   @Post()
