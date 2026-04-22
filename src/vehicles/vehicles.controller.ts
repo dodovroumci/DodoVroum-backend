@@ -19,6 +19,7 @@ import { VehiclesQueryDto } from './dto/vehicles-query.dto';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { VehicleOwnerGuard } from './guards/vehicle-owner.guard';
+import { GetUser } from '../auth/decorators/get-user.decorator';
 
 @ApiTags('Vehicles')
 @Controller('vehicles')
@@ -35,8 +36,8 @@ export class VehiclesController {
   @Post()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  async create(@Body() createVehicleDto: CreateVehicleDto, @Request() req: any) {
-    return this.vehiclesService.create(createVehicleDto, req.user);
+  async create(@Body() createVehicleDto: CreateVehicleDto, @GetUser() user: any) {
+    return this.vehiclesService.create(createVehicleDto, user);
   }
 
   @Get('types')
