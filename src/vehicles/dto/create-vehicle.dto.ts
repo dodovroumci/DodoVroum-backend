@@ -84,6 +84,11 @@ export class CreateVehicleDto {
   @IsString()
   ownerId?: string;
 
+  @ApiProperty({ example: 'uuid-proprietaire', required: false })
+  @IsOptional()
+  @IsString()
+  proprietaireId?: string;
+
   @ApiProperty({ example: true, default: true })
   @IsOptional()
   @IsBoolean()
