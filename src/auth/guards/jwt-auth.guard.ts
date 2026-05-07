@@ -16,12 +16,22 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       context.getHandler(),
       context.getClass(),
     ]);
-    if (isPublic) {
-      return true;
-    }
-
     const request = context.switchToHttp().getRequest<Request>();
     const authHeader = request.headers.authorization;
+
+    // Route publique: authentification optionnelle.
+    // - Sans token: autoriser anonymement
+    // - Avec token Bearer: tenter d'injecter req.user
+    if (isPublic) {
+      if (!authHeader) {
+        return true;
+      }
+      if (!authHeader.startsWith('Bearer ')) {
+        return true;
+      }
+
+      return super.canActivate(context);
+    }
 
     // Vérifier si le token est fourni
     if (!authHeader) {
@@ -36,6 +46,15 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   }
 
   handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (isPublic) {
+      return user ?? null;
+    }
+
     // Gérer les erreurs spécifiques
     if (err || !user) {
       if (info?.name === 'TokenExpiredError') {

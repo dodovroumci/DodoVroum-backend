@@ -35,11 +35,18 @@ export class VehiclesController {
    */
   @Get()
   @Public() // 👈 Autorise l'acces sans token
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Liste tous les vehicules disponibles' })
-  async findAll(@Query() query: any) {
-    // On ne passe plus de ownerId pour que le service retourne TOUS les vehicules
-    // Assure-toi que ton service gere le cas ou ownerId est undefined
-    return this.vehiclesService.findAll(query);
+  async findAll(@Query() query: any, @Request() req: any) {
+    // En mode public, req.user est optionnel (present seulement si token valide fourni).
+    const user = req.user;
+    let ownerId = query.proprietaireId;
+
+    if (user && user.role !== 'ADMIN') {
+      ownerId = user.id;
+    }
+
+    return this.vehiclesService.findAll(query, ownerId);
   }
 
   @Post()
