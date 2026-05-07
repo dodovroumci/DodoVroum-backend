@@ -173,20 +173,24 @@ export class VehiclesService {
 
   
 
-  async findAll(query: any, proprietaireId?: string) {
+  async findAll(query: any, ownerId?: string) {
     const { search, type, brand } = query;
     const where: any = {};
 
-    // 1. Filtre propriétaire (prioritaire)
-    if (proprietaireId) {
-      where.ownerId = proprietaireId;
+    // 1. Logique Dashboard : si un ID est fourni, on restreint a son proprietaire
+    if (ownerId) {
+      where.ownerId = ownerId;
+    }
+    // 2. Logique Mobile : si pas d'ID, on expose les vehicules actifs
+    else {
+      where.isActive = true;
     }
 
-    // 2. Filtres optionnels
+    // 3. Filtres optionnels
     if (type) where.type = type;
     if (brand) where.brand = { contains: brand, mode: 'insensitive' };
 
-    // 3. Recherche textuelle
+    // 4. Recherche textuelle
     if (search) {
       where.OR = [
         { brand: { contains: search, mode: 'insensitive' } },
