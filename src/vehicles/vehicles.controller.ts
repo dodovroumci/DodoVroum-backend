@@ -20,6 +20,7 @@ import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { VehicleOwnerGuard } from './guards/vehicle-owner.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('Vehicles')
 @Controller('vehicles')
@@ -28,13 +29,17 @@ export class VehiclesController {
 
   constructor(private readonly vehiclesService: VehiclesService) {}
 
+  /**
+   * @description Recupere la liste des vehicules.
+   * Accessible sans authentification pour permettre la recherche mobile.
+   */
   @Get()
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  async findAll(@Query() query: any, @GetUser() user: any) {
-    // Si l'utilisateur n'est pas ADMIN, il ne peut voir que ses propres véhicules.
-    const ownerId = user.role !== 'ADMIN' ? user.id : query.proprietaireId;
-    return this.vehiclesService.findAll(query, ownerId);
+  @Public() // 👈 Autorise l'acces sans token
+  @ApiOperation({ summary: 'Liste tous les vehicules disponibles' })
+  async findAll(@Query() query: any) {
+    // On ne passe plus de ownerId pour que le service retourne TOUS les vehicules
+    // Assure-toi que ton service gere le cas ou ownerId est undefined
+    return this.vehiclesService.findAll(query);
   }
 
   @Post()
