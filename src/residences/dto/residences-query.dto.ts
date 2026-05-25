@@ -4,7 +4,8 @@
  */
 
 import { ApiPropertyOptional, IntersectionType } from '@nestjs/swagger';
-import { IsOptional, IsString, IsEnum } from 'class-validator';
+import { IsOptional, IsString, IsEnum, IsBoolean } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 /**
@@ -58,4 +59,13 @@ export class ResidencesQueryDto extends IntersectionType(PaginationDto) {
   @IsOptional()
   @IsString()
   owner_id?: string;
+
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Filtrer par statut actif. true = actives uniquement (défaut), false = inactives uniquement',
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => value === 'true' ? true : value === 'false' ? false : value)
+  isActive?: boolean;
 }

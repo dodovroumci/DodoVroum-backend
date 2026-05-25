@@ -13,6 +13,7 @@ interface ResidencesQueryOptions extends PaginationOptions {
   status?: 'available' | 'occupied';
   search?: string;
   proprietaireId?: string;
+  isActive?: boolean;
 }
 
 @Injectable()
@@ -89,11 +90,11 @@ export class ResidencesService {
   // --- READ METHODS ---
 
   async findAll(options: ResidencesQueryOptions = {}): Promise<PaginationResult<any>> {
-    const { type, search, proprietaireId, ...paginationOptions } = options;
+    const { type, search, proprietaireId, isActive, ...paginationOptions } = options;
     const { page, limit, sortBy, sortOrder } = this.paginationService.validatePaginationOptions(paginationOptions);
 
     const skip = this.paginationService.calculateSkip(page, limit);
-    const where: any = { isActive: true };
+    const where: any = { isActive: isActive !== undefined ? isActive : true };
 
     if (proprietaireId) where.ownerId = proprietaireId;
     if (type) where.typeResidence = { contains: type, mode: 'insensitive' };
