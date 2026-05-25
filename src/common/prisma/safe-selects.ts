@@ -94,6 +94,6 @@ export const safeOfferSelect = {
   id: true,
   title: true,
   description: true,
-  pricePerDay: true,
+  price: true,
   isActive: true,
 } as const;
