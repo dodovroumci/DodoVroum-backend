@@ -22,6 +22,7 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AdminGuard } from '../admin/guards/admin.guard';
 import { IdentityVerificationService } from '../identity-verification/identity-verification.service';
 import { UpdateVerificationStatusDto } from '../identity-verification/dto/update-verification-status.dto';
 import { UserRole, VerificationStatus } from '@prisma/client';
@@ -35,7 +36,9 @@ export class UsersController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Obtenir tous les utilisateurs' })
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Obtenir tous les utilisateurs (admin uniquement)' })
   async findAll(
     @Query('role') role?: string,
     @Query('type') type?: string,
@@ -49,16 +52,19 @@ export class UsersController {
     });
   }
 
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @ApiBearerAuth()
   @Post()
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Obtenir un utilisateur par ID' })
   async findOne(@Param('id') id: string) {
-    const user = await this.usersService.findById(id);
-    const { password, ...result } = user;
-    return result;
+    return this.usersService.findById(id);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -79,14 +85,7 @@ export class UsersController {
       throw new ForbiddenException("Vous n'avez pas l'autorisation de modifier ce profil.");
     }
 
-    const payload = { ...updateUserDto };
-    if (req.user.role !== UserRole.ADMIN) {
-      delete (payload as Partial<UpdateUserDto>).role;
-      delete (payload as Partial<UpdateUserDto>).isVerified;
-      delete (payload as Partial<UpdateUserDto>).isActive;
-    }
-
-    return this.usersService.update(id, payload);
+    return this.usersService.update(id, updateUserDto);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -108,7 +107,7 @@ export class UsersController {
     return this.usersService.remove(id);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()
   @Patch(':id/identity-verification/approve')
   async approveIdentityVerification(@Param('id') userId: string, @Request() req: any) {

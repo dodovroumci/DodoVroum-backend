@@ -37,6 +37,17 @@ export class UsersService {
     });
   }
 
+  async findByIdForAuth(id: string) {
+    return this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true, role: true, isActive: true, refreshTokenHash: true },
+    });
+  }
+
+  async updateRefreshTokenHash(id: string, hash: string | null): Promise<void> {
+    await this.prisma.user.update({ where: { id }, data: { refreshTokenHash: hash } });
+  }
+
   /**
    * Création sécurisée avec hashage automatique
    */
@@ -125,11 +136,7 @@ export class UsersService {
       const user = await this.prisma.user.update({
         where: { id },
         data,
-        select: {
-          ...this.getUserSelectFull(),
-          resetPasswordToken: true,
-          resetPasswordExpires: true
-        },
+        select: this.getUserSelectFull(),
       });
       return this.normalizeUser(user);
     } catch (error) {
@@ -142,12 +149,28 @@ export class UsersService {
     return this.prisma.user.delete({ where: { id } });
   }
 
+  // Fields that must never appear in any API response, regardless of what Prisma returns.
+  private static readonly BLOCKED_FIELDS = [
+    'password',
+    'refreshTokenHash',
+    'resetPasswordToken',
+    'resetPasswordExpires',
+  ] as const;
+
   private normalizeUser(user: any) {
     if (!user) return null;
-    const isVerified = !!user.isVerified;
-    const isActive = !!user.isActive;
+
+    // Defense-in-depth: strip sensitive fields unconditionally before returning.
+    // This protects against accidental select inclusions in any query using this method.
+    const safe = { ...user };
+    for (const field of UsersService.BLOCKED_FIELDS) {
+      delete safe[field];
+    }
+
+    const isVerified = !!safe.isVerified;
+    const isActive = !!safe.isActive;
     return {
-      ...user,
+      ...safe,
       isVerified,
       isActive,
       verified: isVerified,

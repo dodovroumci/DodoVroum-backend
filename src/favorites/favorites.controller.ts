@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { FavoritesService } from './favorites.service';
 import { CreateFavoriteDto } from './dto/create-favorite.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AdminGuard } from '../admin/guards/admin.guard';
 
 @ApiTags('favorites')
 @Controller('favorites')
@@ -28,7 +29,9 @@ export class FavoritesController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Obtenir tous les favoris' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @ApiOperation({ summary: 'Obtenir tous les favoris (admin uniquement)' })
   @ApiResponse({ status: 200, description: 'Liste des favoris' })
   findAll() {
     return this.favoritesService.findAll();
@@ -57,10 +60,11 @@ export class FavoritesController {
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Supprimer des favoris' })
   @ApiResponse({ status: 200, description: 'Supprimé des favoris' })
+  @ApiResponse({ status: 403, description: 'Accès refusé' })
   @ApiResponse({ status: 404, description: 'Favori non trouvé' })
   @ApiResponse({ status: 401, description: 'Non autorisé' })
-  remove(@Param('id') id: string) {
-    return this.favoritesService.remove(id);
+  remove(@Param('id') id: string, @Request() req) {
+    return this.favoritesService.remove(id, req.user.id, req.user.role);
   }
 
   @Delete('residence/:residenceId')

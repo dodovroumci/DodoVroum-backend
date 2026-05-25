@@ -57,16 +57,18 @@ export class ReviewsController {
   @Patch(':id')
   @ApiOperation({ summary: 'Mettre à jour un avis' })
   @ApiResponse({ status: 200, description: 'Avis mis à jour' })
+  @ApiResponse({ status: 403, description: 'Accès refusé' })
   @ApiResponse({ status: 404, description: 'Avis non trouvé' })
-  update(@Param('id') id: string, @Body() updateReviewDto: UpdateReviewDto) {
-    return this.reviewsService.update(id, updateReviewDto);
+  update(@Param('id') id: string, @Body() updateReviewDto: UpdateReviewDto, @Request() req) {
+    return this.reviewsService.update(id, updateReviewDto, req.user.id, req.user.role);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Supprimer un avis' })
   @ApiResponse({ status: 200, description: 'Avis supprimé' })
+  @ApiResponse({ status: 403, description: 'Accès refusé' })
   @ApiResponse({ status: 404, description: 'Avis non trouvé' })
-  remove(@Param('id') id: string) {
-    return this.reviewsService.remove(id);
+  remove(@Param('id') id: string, @Request() req) {
+    return this.reviewsService.remove(id, req.user.id, req.user.role);
   }
 }

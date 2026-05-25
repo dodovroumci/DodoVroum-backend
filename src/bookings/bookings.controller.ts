@@ -7,6 +7,7 @@ import { UpdateBookingDto } from './dto/update-booking.dto';
 import { UpdateBookingDatesDto } from './dto/update-booking-dates.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BookingOwnerOrAdminGuard } from './guards/booking-owner-or-admin.guard';
+import { AdminGuard } from '../admin/guards/admin.guard';
 
 @ApiTags('bookings')
 @ApiBearerAuth()
@@ -23,10 +24,13 @@ export class BookingsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Obtenir toutes les réservations' })
+  @ApiOperation({ summary: 'Obtenir les réservations (scopées par rôle)' })
   @ApiResponse({ status: 200, description: 'Liste des réservations' })
-  findAll() {
-    return this.bookingsService.findAll();
+  findAll(@Request() req) {
+    const { id, role } = req.user;
+    if (role === 'ADMIN') return this.bookingsService.findAll();
+    if (role === 'PROPRIETAIRE') return this.bookingsService.findByOwner(id);
+    return this.bookingsService.findByUser(id);
   }
 
   @Get('my-bookings')
@@ -46,9 +50,10 @@ export class BookingsController {
   @Get(':id')
   @ApiOperation({ summary: 'Obtenir une réservation par ID' })
   @ApiResponse({ status: 200, description: 'Réservation trouvée' })
+  @ApiResponse({ status: 403, description: 'Accès refusé' })
   @ApiResponse({ status: 404, description: 'Réservation non trouvée' })
-  findOne(@Param('id') id: string) {
-    return this.bookingsService.findOne(id);
+  findOne(@Param('id') id: string, @Request() req) {
+    return this.bookingsService.findOne(id, req.user.id, req.user.role);
   }
 
   @Patch(':id/dates')
@@ -61,21 +66,24 @@ export class BookingsController {
   @ApiResponse({ status: 400, description: 'Report impossible ou dates invalides' })
   @ApiResponse({ status: 404, description: 'Réservation non trouvée' })
   @ApiResponse({ status: 409, description: 'Créneau déjà occupé ou bloqué' })
-  updateDates(@Param('id') id: string, @Body() dto: UpdateBookingDatesDto) {
-    return this.bookingsService.updateBookingDates(id, dto);
+  updateDates(@Param('id') id: string, @Body() dto: UpdateBookingDatesDto, @Request() req) {
+    return this.bookingsService.updateBookingDates(id, dto, req.user.id, req.user.role);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Mettre à jour une réservation' })
   @ApiResponse({ status: 200, description: 'Réservation mise à jour' })
+  @ApiResponse({ status: 403, description: 'Accès refusé' })
   @ApiResponse({ status: 404, description: 'Réservation non trouvée' })
-  update(@Param('id') id: string, @Body() updateBookingDto: UpdateBookingDto) {
-    return this.bookingsService.update(id, updateBookingDto);
+  update(@Param('id') id: string, @Body() updateBookingDto: UpdateBookingDto, @Request() req) {
+    return this.bookingsService.update(id, updateBookingDto, req.user.id, req.user.role);
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Supprimer une réservation' })
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Supprimer une réservation (admin uniquement)' })
   @ApiResponse({ status: 200, description: 'Réservation supprimée' })
+  @ApiResponse({ status: 403, description: 'Réservé aux administrateurs' })
   @ApiResponse({ status: 404, description: 'Réservation non trouvée' })
   remove(@Param('id') id: string) {
     return this.bookingsService.remove(id);

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { safeOwnerSelect, safePublicUserSelect } from '../common/prisma/safe-selects';
 import { PaginationService, PaginationOptions, PaginationResult } from '../common/services/pagination.service';
 import { CacheService } from '../cache/cache.service';
 import { AppLoggerService } from '../logging/app-logger.service';
@@ -141,7 +142,10 @@ export class ResidencesService {
   async findOne(id: string) {
     const res = await this.prisma.residence.findUnique({
       where: { id },
-      include: { owner: true, reviews: { include: { user: true } } }
+      include: {
+        owner: { select: safeOwnerSelect },
+        reviews: { include: { user: { select: safePublicUserSelect } } },
+      }
     });
     if (!res) throw new NotFoundException('Résidence non trouvée');
 

@@ -25,9 +25,10 @@ model User {
   localisation       String?
   typeProprietaire   String?
 
-  // --- CHAMPS DE SÉCURITÉ AJOUTÉS ---
+  // --- CHAMPS DE SÉCURITÉ ---
   resetPasswordToken   String?   @unique
   resetPasswordExpires DateTime?
+  refreshTokenHash     String?   @db.VarChar(64)
 
   // --- DOCUMENTS D'IDENTITÉ ---
   identityType       String?
@@ -210,8 +211,9 @@ model Payment {
   currency      String        @default("EUR")
   status        PaymentStatus @default(PENDING)
   method        PaymentMethod
-  transactionId String?
-  createdAt     DateTime      @default(now())
+  transactionId  String?
+  webhookEventId String?      @unique @db.VarChar(255)
+  createdAt      DateTime     @default(now())
   updatedAt     DateTime      @updatedAt
   userId        String
   bookingId     String

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { safeOwnerSelect } from '../common/prisma/safe-selects';
 import { PaginationService, PaginationOptions, PaginationResult } from '../common/services/pagination.service';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { UpdateOfferDto } from './dto/update-offer.dto';
@@ -78,13 +79,7 @@ export class OffersService {
       data,
       include: {
         owner: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-          },
+          select: safeOwnerSelect,
         },
         residence: {
           include: {
@@ -150,13 +145,7 @@ export class OffersService {
         orderBy: { [sortBy]: sortOrder },
         include: {
           owner: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-              phone: true,
-            },
+            select: safeOwnerSelect,
           },
           residence: {
             include: {
@@ -215,13 +204,7 @@ export class OffersService {
       where: { id },
       include: {
         owner: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-          },
+          select: safeOwnerSelect,
         },
         residence: {
           include: {
@@ -359,7 +342,6 @@ export class OffersService {
       proprietaireId: offer.ownerId || (offer.owner ? offer.owner.id : null),
       proprietaire: offer.owner ? {
         id: offer.owner.id,
-        email: offer.owner.email,
         nom: `${offer.owner.firstName} ${offer.owner.lastName}`,
         telephone: offer.owner.phone,
       } : null,
@@ -577,13 +559,7 @@ export class OffersService {
       data: updateOfferDto,
       include: {
         owner: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-          },
+          select: safeOwnerSelect,
         },
         residence: {
           include: {
@@ -633,13 +609,7 @@ export class OffersService {
       data: { isActive: false },
       include: {
         owner: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-          },
+          select: safeOwnerSelect,
         },
       },
     });
@@ -653,13 +623,7 @@ export class OffersService {
       where: { ownerId, isActive: true },
       include: {
         owner: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-          },
+          select: safeOwnerSelect,
         },
         residence: {
           include: {
@@ -752,13 +716,7 @@ export class OffersService {
       },
       include: {
         owner: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-          },
+          select: safeOwnerSelect,
         },
         residence: {
           include: {

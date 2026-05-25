@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { safeResidenceSelect, safeVehicleSelect, safeOfferSelect } from '../common/prisma/safe-selects';
 import { CreateFavoriteDto } from './dto/create-favorite.dto';
 
 @Injectable()
@@ -25,27 +26,43 @@ export class FavoritesService {
 
   async findAll() {
     return this.prisma.favorite.findMany({
-      include: { residence: true, vehicle: true, offer: true }
+      include: {
+        residence: { select: safeResidenceSelect },
+        vehicle: { select: safeVehicleSelect },
+        offer: { select: safeOfferSelect },
+      }
     });
   }
 
   async findByUser(userId: string) {
     return this.prisma.favorite.findMany({
       where: { userId },
-      include: { residence: true, vehicle: true, offer: true }
+      include: {
+        residence: { select: safeResidenceSelect },
+        vehicle: { select: safeVehicleSelect },
+        offer: { select: safeOfferSelect },
+      }
     });
   }
 
   async findOne(id: string) {
     const favorite = await this.prisma.favorite.findUnique({
       where: { id },
-      include: { residence: true, vehicle: true, offer: true }
+      include: {
+        residence: { select: safeResidenceSelect },
+        vehicle: { select: safeVehicleSelect },
+        offer: { select: safeOfferSelect },
+      }
     });
     if (!favorite) throw new NotFoundException('Favori non trouvé');
     return favorite;
   }
 
-  async remove(id: string) {
+  async remove(id: string, requestingUserId: string, requestingRole: string) {
+    const favorite = await this.findOne(id);
+    if (requestingRole !== 'ADMIN' && favorite.userId !== requestingUserId) {
+      throw new ForbiddenException('Vous ne pouvez supprimer que vos propres favoris.');
+    }
     return this.prisma.favorite.delete({ where: { id } });
   }
 

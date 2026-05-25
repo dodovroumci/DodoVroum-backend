@@ -16,7 +16,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { AuthService, LoginResponse } from './auth.service';
+import { AuthService, LoginResponse, RefreshResponse } from './auth.service';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { AuthThrottlerGuard } from './guards/auth-throttler.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -81,11 +81,13 @@ export class AuthController {
     return { message: 'Votre mot de passe a été mis à jour avec succès.' };
   }
 
+  @UseGuards(AuthThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Rafraîchir le token d\'accès' })
+  @ApiOperation({ summary: 'Rafraîchir les tokens (rotation)' })
   @ApiBody({ type: RefreshTokenDto })
-  async refresh(@Body() refreshTokenDto: RefreshTokenDto): Promise<{ access_token: string }> {
+  async refresh(@Body() refreshTokenDto: RefreshTokenDto): Promise<RefreshResponse> {
     return this.authService.refreshToken(refreshTokenDto.refresh_token);
   }
 

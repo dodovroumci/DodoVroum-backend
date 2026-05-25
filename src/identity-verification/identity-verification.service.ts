@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { safeAdminUserSelect } from '../common/prisma/safe-selects';
 import { SubmitIdentityVerificationDto } from './dto/submit-identity-verification.dto';
 import { UpdateVerificationStatusDto } from './dto/update-verification-status.dto';
 import { VerificationStatus, UserRole, IdentityType } from '@prisma/client';
@@ -34,14 +35,14 @@ export class IdentityVerificationService {
       where: { userId },
       update: data,
       create: { ...data, userId },
-      include: { user: true }
+      include: { user: { select: safeAdminUserSelect } }
     });
   }
 
   async getVerificationStatus(userId: string) {
     return this.prisma.identityVerification.findUnique({
       where: { userId },
-      include: { user: true },
+      include: { user: { select: safeAdminUserSelect } },
     });
   }
 
@@ -93,14 +94,14 @@ export class IdentityVerificationService {
     return this.prisma.identityVerification.update({
       where: { userId },
       data: updateData,
-      include: { user: true },
+      include: { user: { select: safeAdminUserSelect } },
     });
   }
 
   async getPendingVerifications() {
     return this.prisma.identityVerification.findMany({
       where: { verificationStatus: VerificationStatus.PENDING },
-      include: { user: true },
+      include: { user: { select: safeAdminUserSelect } },
       orderBy: { submittedAt: 'asc' },
     });
   }

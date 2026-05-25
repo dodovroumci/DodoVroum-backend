@@ -1,13 +1,23 @@
-import { Body, Controller, HttpCode, HttpStatus, Logger, Post } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Logger,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Public } from '../auth/decorators/public.decorator';
 import { PaymentsService } from './payments.service';
 import { GeniusPaySignatureGuard } from './guards/geniuspay-signature.guard';
+import { GeniusPayWebhookIpGuard } from './guards/geniuspay-webhook-ip.guard';
 
 /**
- * Webhooks GeniusPay : pas de JWT (appel serveur à serveur).
- * Filtre IP via {@link GeniusPayWebhookIpGuard} + variable GENIUSPAY_WEBHOOK_ALLOWED_IPS.
- * Signature HMAC à ajouter lorsque GeniusPay fournit le secret.
+ * Webhook server-to-server GeniusPay.
+ * @Public() est intentionnel : GeniusPay n'envoie pas de JWT.
+ * La sécurité repose sur GeniusPaySignatureGuard (HMAC-SHA256) + GeniusPayWebhookIpGuard (IP whitelist).
  */
 @ApiTags('payments')
 @Controller('payments')
@@ -17,39 +27,47 @@ export class PaymentsWebhookController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
   @Public()
+  @UseGuards(GeniusPayWebhookIpGuard, GeniusPaySignatureGuard)
   @Post('geniuspay')
-  // @UseGuards(GeniusPayWebhookIpGuard)
-  // @UseGuards(GeniusPaySignatureGuard)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Webhook GeniusPay — confirmation de paiement',
-    description:
-      'Référence possible : reference, order_id, payment_reference ou data.reference. ' +
-      'IPs listées dans GENIUSPAY_WEBHOOK_ALLOWED_IPS. Derrière un reverse proxy : TRUST_PROXY=true.',
-  })
+  @ApiOperation({ summary: 'Webhook GeniusPay — confirmation de paiement' })
   async handleWebhook(@Body() body: any) {
-    // Journalisation minimale pour le tracking sans exposer de données client.
-    const orderId = body?.order_id ?? body?.payment_reference ?? body?.reference ?? 'N/A';
-    this.logger.log(`Webhook GeniusPay reçu (order_id=${orderId})`);
+    const event = body?.event as string | undefined;
+
+    // Accept only payment.success — all other events are silently ignored
+    if (event !== 'payment.success') {
+      this.logger.log(`Webhook ignoré (event=${event ?? 'unknown'})`);
+      return { status: 'ignored' };
+    }
 
     const data = body?.data as Record<string, unknown> | undefined;
+
     const reference =
       (body['reference'] as string | undefined) ??
       (body['order_id'] as string | undefined) ??
       (body['payment_reference'] as string | undefined) ??
       data?.['reference']?.toString();
 
-    const statusRaw =
-      body['event'] === 'payment.success'
-        ? 'SUCCESS'
-        : ((body['status'] as string | undefined) ?? (data?.['status'] as string | undefined))?.toString();
-
-    const channel = (data?.['channel'] as string | undefined) ?? (body['channel'] as string | undefined);
-
     if (!reference) {
-      return { status: 'error', message: 'Missing reference' };
+      this.logger.warn('Webhook payment.success sans référence');
+      throw new BadRequestException('Référence manquante');
     }
 
-    return this.paymentsService.validatePayment(String(reference), statusRaw, channel);
+    // Extract amount reported by GeniusPay for server-side validation
+    const rawAmount = data?.['amount'] ?? body['amount'];
+    const webhookAmount =
+      typeof rawAmount === 'number'
+        ? rawAmount
+        : typeof rawAmount === 'string'
+        ? parseFloat(rawAmount)
+        : undefined;
+
+    const channel =
+      (data?.['channel'] as string | undefined) ??
+      (body['channel'] as string | undefined);
+
+    this.logger.log(`Webhook payment.success reçu (ref=${reference})`);
+
+    return this.paymentsService.validatePayment(reference, webhookAmount, channel);
   }
 }

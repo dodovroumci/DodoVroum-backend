@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { safeBookingUserSelect, safeResidenceSelect, safeVehicleSelect } from '../common/prisma/safe-selects';
 import { BookingValidationService } from './services/booking-validation.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
@@ -37,15 +38,13 @@ export class BookingsService {
       endDate,
     );
 
-    const totalPrice =
-      bookingPayload.totalPrice ??
-      (await this.bookingValidationService.calculateTotalPrice(
-        bookingPayload.residenceId,
-        bookingPayload.vehicleId,
-        bookingPayload.offerId,
-        bookingPayload.startDate,
-        bookingPayload.endDate,
-      ));
+    const totalPrice = await this.bookingValidationService.calculateTotalPrice(
+      bookingPayload.residenceId,
+      bookingPayload.vehicleId,
+      bookingPayload.offerId,
+      bookingPayload.startDate,
+      bookingPayload.endDate,
+    );
 
     const normalizedPaymentOption = (paymentOption || 'FULL_PAYMENT') as 'DOWN_PAYMENT' | 'FULL_PAYMENT';
     const amountToCharge = normalizedPaymentOption === 'DOWN_PAYMENT' ? downPaymentAmount : totalPrice;
@@ -138,9 +137,13 @@ export class BookingsService {
   /**
    * Report ou modification des dates : disponibilité, statut, recalcul du totalPrice.
    */
-  async updateBookingDates(id: string, dto: UpdateBookingDatesDto) {
+  async updateBookingDates(id: string, dto: UpdateBookingDatesDto, requestingUserId?: string, requestingRole?: string) {
     const booking = await this.prisma.booking.findUnique({ where: { id } });
     if (!booking) throw new NotFoundException('Réservation non trouvée');
+
+    if (requestingUserId && requestingRole !== 'ADMIN' && booking.userId !== requestingUserId) {
+      throw new ForbiddenException('Vous ne pouvez modifier que vos propres réservations.');
+    }
 
     this.assertRescheduleAllowed(booking);
 
@@ -176,7 +179,13 @@ export class BookingsService {
     return this.formatBookingResponse(updated);
   }
 
-  async update(id: string, updateBookingDto: UpdateBookingDto) {
+  async update(id: string, updateBookingDto: UpdateBookingDto, requestingUserId: string, requestingRole: string) {
+    const existing = await this.prisma.booking.findUnique({ where: { id }, select: { userId: true } });
+    if (!existing) throw new NotFoundException('Réservation non trouvée');
+    if (requestingRole !== 'ADMIN' && existing.userId !== requestingUserId) {
+      throw new ForbiddenException('Vous ne pouvez modifier que vos propres réservations.');
+    }
+
     const { startDate, endDate, ...rest } = updateBookingDto;
     const hasStart = startDate !== undefined;
     const hasEnd = endDate !== undefined;
@@ -218,7 +227,7 @@ export class BookingsService {
 
       const hasPatchFields = Object.entries(bookingScalars).some(([, v]) => v !== undefined);
       if (!hasPatchFields) {
-        return this.findOne(id);
+        return this.formatBookingResponse(await this.findOneRaw(id));
       }
 
       const data: Prisma.BookingUpdateInput = {
@@ -263,12 +272,15 @@ export class BookingsService {
   }
 
   async approve(id: string) {
+    const booking = await this.prisma.booking.findUnique({ where: { id }, select: { status: true, userId: true } });
+    if (!booking) throw new NotFoundException('Réservation non trouvée');
+    if (booking.status !== BookingStatus.PENDING && booking.status !== BookingStatus.PAID) {
+      throw new BadRequestException(`Impossible d'approuver une réservation en statut ${booking.status}.`);
+    }
+
     const updated = await this.prisma.booking.update({
       where: { id },
-      data: {
-        status: BookingStatus.CONFIRMED,
-        ownerConfirmedAt: new Date() 
-      },
+      data: { status: BookingStatus.CONFIRMED, ownerConfirmedAt: new Date() },
       include: this.getBookingInclude(),
     });
     await this.sendBookingNotification(updated, updated.userId, 'APPROVED');
@@ -276,6 +288,12 @@ export class BookingsService {
   }
 
   async reject(id: string, reason?: string) {
+    const booking = await this.prisma.booking.findUnique({ where: { id }, select: { status: true, userId: true } });
+    if (!booking) throw new NotFoundException('Réservation non trouvée');
+    if (booking.status !== BookingStatus.PENDING && booking.status !== BookingStatus.PAID) {
+      throw new BadRequestException(`Impossible de rejeter une réservation en statut ${booking.status}.`);
+    }
+
     const updated = await this.prisma.booking.update({
       where: { id },
       data: { status: BookingStatus.CANCELLED, notes: reason },
@@ -286,13 +304,13 @@ export class BookingsService {
   }
 
   async updateStatus(id: string, status: BookingStatus) {
-    const booking = await this.prisma.booking.findUnique({
-      where: { id },
-      select: { id: true, userId: true },
-    });
+    const booking = await this.prisma.booking.findUnique({ where: { id }, select: { id: true, userId: true, status: true } });
+    if (!booking) throw new NotFoundException('Réservation non trouvée');
 
-    if (!booking) {
-      throw new NotFoundException('Réservation non trouvée');
+    if (status === BookingStatus.CONFIRMED &&
+        booking.status !== BookingStatus.PENDING &&
+        booking.status !== BookingStatus.PAID) {
+      throw new BadRequestException(`Impossible de confirmer une réservation en statut ${booking.status}.`);
     }
 
     const updated = await this.prisma.booking.update({
@@ -312,19 +330,28 @@ export class BookingsService {
   }
 
   async confirmKeyRetrieval(id: string, userId: string) {
+    const booking = await this.prisma.booking.findUnique({ where: { id }, select: { status: true, userId: true } });
+    if (!booking) throw new NotFoundException('Réservation non trouvée');
+    if (booking.userId !== userId) throw new ForbiddenException('Action non autorisée.');
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new BadRequestException(`La récupération de clé nécessite une réservation CONFIRMÉE (statut actuel : ${booking.status}).`);
+    }
+
     const updated = await this.prisma.booking.update({
       where: { id },
-      data: {
-        status: 'EN_COURS_SEJOUR',
-        keyRetrievedAt: new Date(),
-        ownerConfirmedAt: new Date()
-      },
+      data: { status: 'EN_COURS_SEJOUR', keyRetrievedAt: new Date(), ownerConfirmedAt: new Date() },
       include: this.getBookingInclude(),
     });
     return this.formatBookingResponse(updated);
   }
 
   async confirmOwnerKeyHandover(id: string, ownerId: string) {
+    const booking = await this.prisma.booking.findUnique({ where: { id }, select: { status: true } });
+    if (!booking) throw new NotFoundException('Réservation non trouvée');
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new BadRequestException(`La remise de clé nécessite une réservation CONFIRMÉE (statut actuel : ${booking.status}).`);
+    }
+
     const updated = await this.prisma.booking.update({
       where: { id },
       data: { status: 'EN_COURS_SEJOUR', ownerConfirmedAt: new Date() },
@@ -334,6 +361,14 @@ export class BookingsService {
   }
 
   async confirmCheckOut(id: string, userId: string) {
+    const booking = await this.prisma.booking.findUnique({ where: { id }, select: { status: true, userId: true } });
+    if (!booking) throw new NotFoundException('Réservation non trouvée');
+    if (booking.userId !== userId) throw new ForbiddenException('Action non autorisée.');
+    const checkoutAllowed = ['EN_COURS_SEJOUR', 'ONGOING', BookingStatus.ONGOING] as string[];
+    if (!checkoutAllowed.includes(booking.status as string)) {
+      throw new BadRequestException(`Le check-out nécessite une réservation en cours (statut actuel : ${booking.status}).`);
+    }
+
     const updated = await this.prisma.booking.update({
       where: { id },
       data: { status: BookingStatus.COMPLETED, checkOutAt: new Date() },
@@ -352,9 +387,27 @@ export class BookingsService {
     return bookings.map(b => this.formatBookingResponse(b));
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, requestingUserId: string, requestingRole: string) {
     const booking = await this.findOneRaw(id);
     if (!booking) throw new NotFoundException('Réservation non trouvée');
+
+    if (requestingRole !== 'ADMIN') {
+      // Allow: booking client OR property owner (residence / vehicle / offer)
+      const hasAccess = await this.prisma.booking.findFirst({
+        where: {
+          id,
+          OR: [
+            { userId: requestingUserId },
+            { residence: { ownerId: requestingUserId } },
+            { vehicle:   { ownerId: requestingUserId } },
+            { offer:     { ownerId: requestingUserId } },
+          ],
+        },
+        select: { id: true },
+      });
+      if (!hasAccess) throw new BadRequestException('Accès refusé');
+    }
+
     return this.formatBookingResponse(booking);
   }
 
@@ -393,10 +446,15 @@ export class BookingsService {
 
   private getBookingInclude() {
     return {
-      user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
-      residence: true,
-      vehicle: true,
-      offer: { include: { residence: true, vehicle: true } },
+      user: { select: safeBookingUserSelect },
+      residence: { select: safeResidenceSelect },
+      vehicle: { select: safeVehicleSelect },
+      offer: {
+        include: {
+          residence: { select: safeResidenceSelect },
+          vehicle: { select: safeVehicleSelect },
+        },
+      },
       payments: true,
       reviews: { select: { id: true } },
     };

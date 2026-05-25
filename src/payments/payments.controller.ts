@@ -18,6 +18,7 @@ import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { UpdatePaymentDto } from './dto/update-payment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AdminGuard } from '../admin/guards/admin.guard';
 import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('payments')
@@ -84,14 +85,23 @@ export class PaymentsController { // <--- VÉRIFIE BIEN LE "export" ICI
   }
 
   @Get()
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Lister tous les paiements (admin uniquement)' })
   findAll() { return this.paymentsService.findAll(); }
 
   @Get(':id')
-  findOne(@Param('id') id: string) { return this.paymentsService.findOne(id); }
+  @ApiOperation({ summary: 'Obtenir un paiement (propriétaire ou admin)' })
+  findOne(@Param('id') id: string, @Request() req) {
+    return this.paymentsService.findOne(id, req.user.id, req.user.role);
+  }
 
   @Patch(':id')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Mettre à jour un paiement (admin uniquement)' })
   update(@Param('id') id: string, @Body() dto: UpdatePaymentDto) { return this.paymentsService.update(id, dto); }
 
   @Delete(':id')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Supprimer un paiement (admin uniquement)' })
   remove(@Param('id') id: string) { return this.paymentsService.remove(id); }
 }

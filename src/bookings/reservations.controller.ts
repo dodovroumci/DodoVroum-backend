@@ -54,11 +54,6 @@ export class ReservationsController {
     bookingDto.startDate = dto.startDate || dto.date_debut;
     bookingDto.endDate = dto.endDate || dto.date_fin;
 
-    // Prix
-    if (dto.totalPrice !== undefined || dto.prix_total !== undefined) {
-      bookingDto.totalPrice = dto.totalPrice !== undefined ? dto.totalPrice : dto.prix_total;
-    }
-
     // --- FIX : Gestion du paiement sans import Prisma problématique ---
     const paymentOption = dto.paymentOption || dto.option_paiement;
     if (paymentOption) {
@@ -143,20 +138,20 @@ export class ReservationsController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtenir une réservation par ID' })
-  findOne(@Param('id') id: string) {
-    return this.bookingsService.findOne(id);
+  findOne(@Param('id') id: string, @Request() req) {
+    return this.bookingsService.findOne(id, req.user.id, req.user.role);
   }
 
   @Patch(':id/dates')
   @ApiOperation({ summary: 'Reporter ou modifier les dates (validation disponibilité + prix)' })
-  updateDates(@Param('id') id: string, @Body() dto: UpdateBookingDatesDto) {
-    return this.bookingsService.updateBookingDates(id, dto);
+  updateDates(@Param('id') id: string, @Body() dto: UpdateBookingDatesDto, @Request() req) {
+    return this.bookingsService.updateBookingDates(id, dto, req.user.id, req.user.role);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Mettre à jour une réservation' })
-  update(@Param('id') id: string, @Body() updateBookingDto: UpdateBookingDto) {
-    return this.bookingsService.update(id, updateBookingDto);
+  update(@Param('id') id: string, @Body() updateBookingDto: UpdateBookingDto, @Request() req) {
+    return this.bookingsService.update(id, updateBookingDto, req.user.id, req.user.role);
   }
 
   @Delete(':id')

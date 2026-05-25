@@ -7,6 +7,7 @@ import {
   ForbiddenException
 } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { safeOwnerSelect } from '../common/prisma/safe-selects';
 import { VehiclesQueryDto } from './dto/vehicles-query.dto';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { VehicleType, Prisma } from '@prisma/client';
@@ -202,8 +203,8 @@ export class VehiclesService {
     const vehicles = await this.prisma.vehicle.findMany({
       where,
       include: {
-        owner: true,
-        reviews: true,
+        owner: { select: safeOwnerSelect },
+        reviews: { select: { id: true, rating: true } },
       },
       orderBy: { createdAt: 'desc' },
     });

@@ -1,10 +1,7 @@
 import { ApiPropertyOptional, OmitType, PartialType } from '@nestjs/swagger';
 import { CreateUserDto } from './create-user.dto';
-import { IsBoolean, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsOptional, IsString, MinLength } from 'class-validator';
 
-/**
- * Mise à jour partielle : mot de passe explicitement optionnel (validation seulement s’il est envoyé).
- */
 export class UpdateUserDto extends PartialType(OmitType(CreateUserDto, ['password'] as const)) {
   @ApiPropertyOptional({
     description: 'Nouveau mot de passe (laisser absent pour ne pas le changer)',
@@ -19,12 +16,4 @@ export class UpdateUserDto extends PartialType(OmitType(CreateUserDto, ['passwor
   @IsOptional()
   @IsString()
   avatar?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  isVerified?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
 }

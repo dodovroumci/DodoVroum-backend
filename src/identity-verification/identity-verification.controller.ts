@@ -14,6 +14,7 @@ import { IdentityVerificationService } from './identity-verification.service';
 import { SubmitIdentityVerificationDto } from './dto/submit-identity-verification.dto';
 import { UpdateVerificationStatusDto } from './dto/update-verification-status.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AdminGuard } from '../admin/guards/admin.guard';
 import { VerificationStatus } from '@prisma/client';
 
 @ApiTags('identity-verification')
@@ -38,6 +39,7 @@ export class IdentityVerificationController {
   }
 
   @Get('admin/all')
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Admin : Voir toutes les vérifications' })
   async getAll(@Query('status') status?: VerificationStatus) {
     // Utilise la méthode getPendingVerifications ou crée une méthode générique
@@ -45,6 +47,7 @@ export class IdentityVerificationController {
   }
 
   @Patch('admin/verify/:userId')
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Admin : Approuver ou rejeter par User ID' })
   async verifyUser(
     @Param('userId') userId: string,

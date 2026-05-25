@@ -33,12 +33,6 @@ export class CreateBookingDto {
   @IsDateString()
   endDate: string;
 
-  @ApiPropertyOptional({ example: 500.00, description: 'Montant total calculé' })
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  totalPrice?: number;
-
   @ApiPropertyOptional({ example: 'Notes pour le propriétaire' })
   @IsOptional()
   @IsString()

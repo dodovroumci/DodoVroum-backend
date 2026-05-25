@@ -1,6 +1,7 @@
-import { BadGatewayException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadGatewayException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { safeAdminUserSelect } from '../common/prisma/safe-selects';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { UpdatePaymentDto } from './dto/update-payment.dto';
 import { BookingStatus, PaymentMethod, PaymentStatus } from '@prisma/client';
@@ -20,9 +21,8 @@ export class PaymentsService {
   // Endpoint validé pour éviter les redirections 301/302
   private readonly GENIUS_API_URL = 'https://pay.genius.ci/public/api/v1/merchant/payments';
 
-  // Agent HTTPS configuré pour résoudre les erreurs SSL alert 112 (SNI)
   private readonly httpsAgent = new https.Agent({
-    rejectUnauthorized: false, // Nécessaire selon l'infra actuelle du PSP
+    rejectUnauthorized: true,
     servername: 'pay.genius.ci',
   });
 
@@ -43,10 +43,13 @@ export class PaymentsService {
   ) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
-      include: { user: true },
+      include: {
+        user: { select: { firstName: true, lastName: true, email: true } },
+      },
     });
 
     if (!booking) throw new NotFoundException('Réservation introuvable.');
+    if (booking.userId !== userId) throw new ForbiddenException('Vous ne pouvez payer que vos propres réservations.');
 
     // On réutilise en priorité le paiement PENDING déjà calculé (acompte vs total).
     const pendingPayment = await this.prisma.payment.findFirst({
@@ -171,76 +174,99 @@ export class PaymentsService {
   }
 
   /**
-   * Confirmation GeniusPay : met à jour le paiement et la réservation si le statut indique un succès.
-   * @param reference - ID de paiement, `transactionId` GeniusPay, ou ID de réservation (`bookingId`).
-   * @param status - ex. SUCCESSFUL, COMPLETED, success (voir {@link isSuccessfulPaymentStatus}).
-   * @param channel - Canal GeniusPay pour mapper {@link PaymentMethod} (optionnel).
+   * Confirmation GeniusPay : valide et confirme un paiement après vérification HMAC.
+   * @param reference    - transactionId GeniusPay, ID Prisma, ou bookingId (fallback).
+   * @param webhookAmount - Montant rapporté par GeniusPay — comparé au montant stocké.
+   * @param channel      - Canal de paiement (card, momo…) pour mapper PaymentMethod.
    */
   async validatePayment(
     reference: string,
-    status?: string,
+    webhookAmount: number | undefined,
     channel?: string,
   ): Promise<
     | { status: 'success' }
     | { status: 'not_found' }
     | { status: 'already_processed' }
-    | { status: 'ignored' }
+    | { status: 'amount_mismatch' }
   > {
-    // 1. Recherche ultra-large : par ID Prisma, par transactionId GeniusPay, ou par bookingId
     const payment = await this.prisma.payment.findFirst({
       where: {
         OR: [
-          { id: reference }, // Cas ID Prisma
-          { transactionId: reference }, // Cas ID GeniusPay (MTX-...)
-          { bookingId: reference }, // Cas secours BookingID
+          { transactionId: reference },
+          { id: reference },
+          { bookingId: reference },
         ],
       },
       include: { booking: true },
     });
 
     if (!payment) {
-      this.logger.warn(`⚠️ [WEBHOOK] Référence inconnue: ${reference}`);
+      this.logger.warn(`[WEBHOOK] Référence inconnue (ref=${reference})`);
       return { status: 'not_found' };
     }
 
-    if (payment.status === PaymentStatus.COMPLETED) {
+    // Fast path: already confirmed (idempotence via webhookEventId unique constraint)
+    if (payment.webhookEventId !== null || payment.status === PaymentStatus.COMPLETED) {
+      this.logger.log(`[WEBHOOK] Déjà traité (ref=${reference}, bookingId=${payment.bookingId})`);
       return { status: 'already_processed' };
     }
 
-    if (!this.isSuccessfulPaymentStatus(status)) {
-      return { status: 'ignored' };
+    // Amount validation — never trust the payload amount over what we stored
+    if (webhookAmount !== undefined && !isNaN(webhookAmount)) {
+      const diff = Math.abs(webhookAmount - payment.amount);
+      if (diff > 1) {
+        this.logger.warn(
+          `[WEBHOOK_AMOUNT_MISMATCH] ref=${reference} bookingId=${payment.bookingId} ` +
+          `expected=${payment.amount} received=${webhookAmount}`,
+        );
+        return { status: 'amount_mismatch' };
+      }
+    }
+
+    // Booking must not already be paid
+    if (
+      payment.booking.status === BookingStatus.PAID ||
+      payment.booking.status === BookingStatus.CONFIRMED
+    ) {
+      this.logger.log(`[WEBHOOK] Booking déjà confirmé (bookingId=${payment.bookingId})`);
+      return { status: 'already_processed' };
     }
 
     try {
-      await this.prisma.$transaction([
-        this.prisma.payment.update({
-          where: { id: payment.id },
-          data: {
-            status: PaymentStatus.COMPLETED,
-            method: this.mapChannelToMethod(channel),
-          },
-        }),
-        this.prisma.booking.update({
-          where: { id: payment.bookingId },
-          data: { status: BookingStatus.PAID },
-        }),
-      ]);
+      // Atomic update: only succeeds if the payment is still PENDING and has no webhookEventId.
+      // This prevents concurrent duplicate webhook deliveries from double-processing.
+      const atomicUpdate = await this.prisma.payment.updateMany({
+        where: {
+          id: payment.id,
+          status: PaymentStatus.PENDING,
+          webhookEventId: null,
+        },
+        data: {
+          status: PaymentStatus.COMPLETED,
+          method: this.mapChannelToMethod(channel),
+          webhookEventId: reference,
+        },
+      });
 
-      this.logger.log(`💰 [WEBHOOK_SUCCESS] Booking ${payment.bookingId} confirmé.`);
+      if (atomicUpdate.count === 0) {
+        // Another concurrent request already processed this webhook
+        return { status: 'already_processed' };
+      }
+
+      await this.prisma.booking.update({
+        where: { id: payment.bookingId },
+        data: { status: BookingStatus.PAID },
+      });
+
+      this.logger.log(
+        `[WEBHOOK_SUCCESS] event=payment.success bookingId=${payment.bookingId} status=PAID`,
+      );
       return { status: 'success' };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      this.logger.error(`❌ [WEBHOOK_DB_FAILURE] ${msg}`);
+      this.logger.error(`[WEBHOOK_DB_FAILURE] ${msg}`);
       throw e;
     }
-  }
-
-  private isSuccessfulPaymentStatus(status?: string): boolean {
-    if (status == null || status === '') {
-      return false;
-    }
-    const s = status.toString().toLowerCase().trim();
-    return ['success', 'successful', 'completed', 'paid'].includes(s);
   }
 
   /**
@@ -264,11 +290,21 @@ export class PaymentsService {
   }
 
   async findAll() {
-    return this.prisma.payment.findMany({ include: { user: true, booking: true } });
+    return this.prisma.payment.findMany({
+      include: { user: { select: safeAdminUserSelect }, booking: true },
+    });
   }
 
-  async findOne(id: string) {
-    return this.prisma.payment.findUnique({ where: { id }, include: { user: true, booking: true } });
+  async findOne(id: string, requestingUserId: string, requestingRole: string) {
+    const payment = await this.prisma.payment.findUnique({
+      where: { id },
+      include: { user: { select: safeAdminUserSelect }, booking: true },
+    });
+    if (!payment) throw new NotFoundException('Paiement introuvable.');
+    if (requestingRole !== 'ADMIN' && payment.userId !== requestingUserId) {
+      throw new ForbiddenException('Accès refusé.');
+    }
+    return payment;
   }
 
   async update(id: string, dto: UpdatePaymentDto) {

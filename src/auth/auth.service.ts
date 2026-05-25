@@ -1,9 +1,9 @@
-/**
- * @file src/auth/auth.service.ts
- * @description Expert Fullstack - Secure Auth Service (Logic delegated to UsersService)
- */
-
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
@@ -17,8 +17,15 @@ export interface LoginResponse {
   user: Partial<User>;
 }
 
+export interface RefreshResponse {
+  access_token: string;
+  refresh_token: string;
+}
+
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
@@ -27,10 +34,8 @@ export class AuthService {
 
   async validateUser(email: string, pass: string): Promise<any> {
     const user = await this.usersService.findByEmail(email.toLowerCase().trim());
-
     if (!user || !user.isActive) return null;
 
-    // On compare le mot de passe clair reçu avec le hash stocké
     const isMatch = await bcrypt.compare(pass, user.password);
     if (!isMatch) return null;
 
@@ -39,43 +44,74 @@ export class AuthService {
   }
 
   async login(user: any): Promise<LoginResponse> {
-    const payload = {
-      email: user.email,
-      sub: user.id,
-      role: user.role,
-      type: 'access'
-    };
+    const [access_token, refresh_token] = await this._generateTokenPair(user);
+    const hash = this._hashToken(refresh_token);
 
-    const refreshPayload = {
-      sub: user.id,
-      type: 'refresh'
-    };
-
-    const [access_token, refresh_token] = await Promise.all([
-      this.jwtService.signAsync(payload, {
-        expiresIn: this.configService.get<string>('JWT_EXPIRES_IN', '15m'),
-        secret: this.configService.get<string>('JWT_SECRET')
-      }),
-      this.jwtService.signAsync(refreshPayload, {
-        expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN', '7d'),
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET')
-      }),
-    ]);
+    await this.usersService.updateRefreshTokenHash(user.id, hash);
+    this.logger.log(`[LOGIN] user=${user.id} role=${user.role}`);
 
     return { access_token, refresh_token, user };
   }
 
-  /**
-   * Register : On délègue tout au UsersService (y compris le hashage)
-   */
   async register(registerData: any): Promise<LoginResponse> {
     const existingUser = await this.usersService.findByEmail(registerData.email);
     if (existingUser) throw new BadRequestException('Email déjà utilisé');
 
-    // On passe les données brutes, UsersService.create s'occupe de la sécurité
     const user = await this.usersService.create(registerData);
-
     return this.login(user);
+  }
+
+  async refreshToken(incomingRefreshToken: string): Promise<RefreshResponse> {
+    let payload: any;
+    try {
+      payload = await this.jwtService.verifyAsync(incomingRefreshToken, {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      });
+    } catch {
+      throw new UnauthorizedException('Session expirée');
+    }
+
+    if (payload?.type !== 'refresh') {
+      throw new UnauthorizedException('Token invalide');
+    }
+
+    const user = await this.usersService.findByIdForAuth(payload.sub);
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Accès refusé');
+    }
+
+    if (!user.refreshTokenHash) {
+      // Session already invalidated (logout or previous reuse detection)
+      throw new UnauthorizedException('Session expirée');
+    }
+
+    const incomingHash = this._hashToken(incomingRefreshToken);
+    const storedHash = user.refreshTokenHash;
+
+    // Constant-time comparison to prevent timing attacks
+    const match =
+      incomingHash.length === storedHash.length &&
+      crypto.timingSafeEqual(Buffer.from(incomingHash), Buffer.from(storedHash));
+
+    if (!match) {
+      // Token reuse detected: invalidate all sessions for this user
+      await this.usersService.updateRefreshTokenHash(user.id, null);
+      this.logger.warn(`[REFRESH_REUSE] user=${user.id} — all sessions invalidated`);
+      throw new UnauthorizedException('Session invalide');
+    }
+
+    // Rotate: issue new pair and overwrite stored hash atomically
+    const [access_token, refresh_token] = await this._generateTokenPair(user);
+    const newHash = this._hashToken(refresh_token);
+    await this.usersService.updateRefreshTokenHash(user.id, newHash);
+
+    this.logger.log(`[REFRESH] user=${user.id} — tokens rotated`);
+    return { access_token, refresh_token };
+  }
+
+  async logout(userId: string): Promise<void> {
+    await this.usersService.updateRefreshTokenHash(userId, null);
+    this.logger.log(`[LOGOUT] user=${userId}`);
   }
 
   async requestPasswordReset(email: string): Promise<void> {
@@ -90,12 +126,11 @@ export class AuthService {
       resetPasswordExpires: new Date(Date.now() + 30 * 60 * 1000),
     } as any);
 
-    console.log(`[AUTH] Reset Token pour ${email}: ${resetToken}`);
+    // TODO: envoyer resetToken par email (nodemailer / SendGrid)
+    // Ne jamais logger le token brut en production
+    this.logger.log(`[PASSWORD_RESET_REQUESTED] user=${user.id}`);
   }
 
-  /**
-   * Reset Password : Le UsersService.update détectera le nouveau password et le hashra
-   */
   async resetPassword(token: string, newPassword: string): Promise<boolean> {
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
     const user = await this.usersService.findByResetToken(hashedToken);
@@ -110,34 +145,37 @@ export class AuthService {
       resetPasswordExpires: null,
     } as any);
 
+    // Invalidate all sessions after password reset
+    await this.usersService.updateRefreshTokenHash(user.id, null);
+    this.logger.log(`[PASSWORD_RESET_DONE] user=${user.id} — all sessions invalidated`);
+
     return true;
   }
 
-  async refreshToken(refreshToken: string): Promise<{ access_token: string }> {
-    try {
-      const payload = await this.jwtService.verifyAsync(refreshToken, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET')
-      });
-      const user = await this.usersService.findById(payload.sub);
-      if (!user || !user.isActive) throw new UnauthorizedException();
+  // ─── Private helpers ────────────────────────────────────────────────────────
 
-      const access_token = await this.jwtService.signAsync({
-        email: user.email,
-        sub: user.id,
-        role: user.role,
-        type: 'access'
-      }, {
-        expiresIn: this.configService.get<string>('JWT_EXPIRES_IN', '15m'),
-        secret: this.configService.get<string>('JWT_SECRET')
-      });
-
-      return { access_token };
-    } catch {
-      throw new UnauthorizedException('Session expirée');
-    }
+  private async _generateTokenPair(
+    user: { id: string; email: string; role: string },
+  ): Promise<[string, string]> {
+    return Promise.all([
+      this.jwtService.signAsync(
+        { email: user.email, sub: user.id, role: user.role, type: 'access' },
+        {
+          expiresIn: this.configService.get<string>('JWT_EXPIRES_IN', '15m'),
+          secret: this.configService.get<string>('JWT_SECRET'),
+        },
+      ),
+      this.jwtService.signAsync(
+        { sub: user.id, type: 'refresh' },
+        {
+          expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN', '7d'),
+          secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+        },
+      ),
+    ]);
   }
 
-  async logout(userId: string): Promise<void> {
-    return;
+  private _hashToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
   }
 }
