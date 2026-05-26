@@ -1,5 +1,6 @@
 import { ApiPropertyOptional, IntersectionType } from '@nestjs/swagger';
-import { IsOptional, IsString, IsEnum, IsNumberString } from 'class-validator';
+import { IsOptional, IsString, IsEnum, IsNumberString, IsBoolean } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { VehicleType } from '@prisma/client';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
@@ -37,4 +38,13 @@ export class VehiclesQueryDto extends IntersectionType(PaginationDto) {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Filtrer par statut actif. true = actifs uniquement (défaut), false = inactifs uniquement',
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => value === 'true' ? true : value === 'false' ? false : value)
+  isActive?: boolean;
 }

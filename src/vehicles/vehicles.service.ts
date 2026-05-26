@@ -175,16 +175,16 @@ export class VehiclesService {
   
 
   async findAll(query: any, ownerId?: string) {
-    const { search, type, brand } = query;
+    const { search, type, brand, isActive } = query;
     const where: any = {};
 
     // 1. Logique Dashboard : si un ID est fourni, on restreint a son proprietaire
     if (ownerId) {
       where.ownerId = ownerId;
     }
-    // 2. Logique Mobile : si pas d'ID, on expose les vehicules actifs
+    // 2. Logique Mobile : si pas d'ID, on expose les vehicules actifs (ou inactifs si isActive=false)
     else {
-      where.isActive = true;
+      where.isActive = isActive !== undefined ? isActive : true;
     }
 
     // 3. Filtres optionnels

@@ -37,7 +37,7 @@ export class VehiclesController {
   @Public() // 👈 Autorise l'acces sans token
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Liste tous les vehicules disponibles' })
-  async findAll(@Query() query: any, @Request() req: any) {
+  async findAll(@Query() query: VehiclesQueryDto, @Request() req: any) {
     // Public listing — show all active vehicles regardless of who is calling.
     // ownerId filter is only applied when explicitly passed as a query param.
     const ownerId = query.proprietaireId ?? undefined;
