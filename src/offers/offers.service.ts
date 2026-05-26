@@ -70,6 +70,18 @@ export class OffersService {
       );
     }
 
+    const [offerWithResidence, offerWithVehicle] = await Promise.all([
+      this.prisma.offer.findFirst({ where: { residenceId, isActive: true }, select: { id: true } }),
+      this.prisma.offer.findFirst({ where: { vehicleId, isActive: true }, select: { id: true } }),
+    ]);
+
+    if (offerWithResidence) {
+      throw new BadRequestException('Cette résidence est déjà utilisée dans une offre active');
+    }
+    if (offerWithVehicle) {
+      throw new BadRequestException('Ce véhicule est déjà utilisé dans une offre active');
+    }
+
     const data: any = { ...createOfferDto };
     
     // Assigner automatiquement le propriétaire (celui de la résidence/vehicule)
@@ -551,6 +563,22 @@ export class OffersService {
         throw new BadRequestException(
           'Le véhicule et la résidence doivent appartenir au même propriétaire'
         );
+      }
+
+      const [offerWithResidence, offerWithVehicle] = await Promise.all([
+        updateOfferDto.residenceId
+          ? this.prisma.offer.findFirst({ where: { residenceId, isActive: true, NOT: { id } }, select: { id: true } })
+          : Promise.resolve(null),
+        updateOfferDto.vehicleId
+          ? this.prisma.offer.findFirst({ where: { vehicleId, isActive: true, NOT: { id } }, select: { id: true } })
+          : Promise.resolve(null),
+      ]);
+
+      if (offerWithResidence) {
+        throw new BadRequestException('Cette résidence est déjà utilisée dans une offre active');
+      }
+      if (offerWithVehicle) {
+        throw new BadRequestException('Ce véhicule est déjà utilisé dans une offre active');
       }
     }
 
