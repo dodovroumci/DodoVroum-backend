@@ -6,6 +6,7 @@ import { CreateOfferDto } from './dto/create-offer.dto';
 import { UpdateOfferDto } from './dto/update-offer.dto';
 import { ResidencesService } from '../residences/residences.service';
 import { VehiclesService } from '../vehicles/vehicles.service';
+import { activeOfferWhere, nonDeletedOfferWhere, computeOfferStatus, OfferStatus } from './offer-filters';
 
 @Injectable()
 export class OffersService {
@@ -70,9 +71,16 @@ export class OffersService {
       );
     }
 
+    // Unicité : résidence/véhicule non utilisés dans une offre active ET non expirée
     const [offerWithResidence, offerWithVehicle] = await Promise.all([
-      this.prisma.offer.findFirst({ where: { residenceId, isActive: true }, select: { id: true } }),
-      this.prisma.offer.findFirst({ where: { vehicleId, isActive: true }, select: { id: true } }),
+      this.prisma.offer.findFirst({
+        where: { residenceId, ...activeOfferWhere() },
+        select: { id: true },
+      }),
+      this.prisma.offer.findFirst({
+        where: { vehicleId, ...activeOfferWhere() },
+        select: { id: true },
+      }),
     ]);
 
     if (offerWithResidence) {
@@ -137,8 +145,9 @@ export class OffersService {
     const { proprietaireId, ...paginationOptions } = options || {};
     const { page, limit, sortBy, sortOrder } = this.paginationService.validatePaginationOptions(paginationOptions);
     
-    const where: any = { isActive: true };
-    
+    // Scope public : actives ET non expirées
+    const where: any = { ...activeOfferWhere() };
+
     if (proprietaireId) {
       where.ownerId = proprietaireId;
     }
@@ -340,6 +349,13 @@ export class OffersService {
       ? reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / count 
       : null;
 
+    // Calcul du statut basé sur isActive + validTo
+    const statut: OfferStatus = computeOfferStatus({
+      isActive: offer.isActive,
+      validTo: offer.validTo,
+      validFrom: offer.validFrom,
+    });
+
     return {
       id: offer.id,
       titre: offer.title,
@@ -357,6 +373,7 @@ export class OffersService {
         nom: `${offer.owner.firstName} ${offer.owner.lastName}`,
         telephone: offer.owner.phone,
       } : null,
+      statut,
       validFrom: offer.validFrom,
       validTo: offer.validTo,
       createdAt: offer.createdAt,
@@ -565,12 +582,19 @@ export class OffersService {
         );
       }
 
+      // Unicité : résidence/véhicule non utilisés dans une autre offre active et non expirée
       const [offerWithResidence, offerWithVehicle] = await Promise.all([
         updateOfferDto.residenceId
-          ? this.prisma.offer.findFirst({ where: { residenceId, isActive: true, NOT: { id } }, select: { id: true } })
+          ? this.prisma.offer.findFirst({
+              where: { residenceId, ...activeOfferWhere(), NOT: { id } },
+              select: { id: true },
+            })
           : Promise.resolve(null),
         updateOfferDto.vehicleId
-          ? this.prisma.offer.findFirst({ where: { vehicleId, isActive: true, NOT: { id } }, select: { id: true } })
+          ? this.prisma.offer.findFirst({
+              where: { vehicleId, ...activeOfferWhere(), NOT: { id } },
+              select: { id: true },
+            })
           : Promise.resolve(null),
       ]);
 
@@ -647,8 +671,9 @@ export class OffersService {
    * Récupère les offres d'un propriétaire
    */
   async findByOwner(ownerId: string) {
+    // Vue propriétaire : inclut les offres expirées (statut visible) mais pas les soft-deleted
     const offers = await this.prisma.offer.findMany({
-      where: { ownerId, isActive: true },
+      where: { ownerId, ...nonDeletedOfferWhere() },
       include: {
         owner: {
           select: safeOwnerSelect,
@@ -716,7 +741,8 @@ export class OffersService {
     const offers = await this.prisma.offer.findMany({
       where: {
         AND: [
-          { isActive: true },
+          // Scope public : actives ET non expirées
+          activeOfferWhere(),
           {
             OR: [
               { title: { contains: query } },
