@@ -6,6 +6,7 @@ import { UpdateOfferDto } from './dto/update-offer.dto';
 import { OffersQueryDto } from './dto/offers-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OfferOwnerGuard } from './guards/offer-owner.guard';
+import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('offers')
 @Controller('offers')
@@ -77,11 +78,23 @@ export class OffersController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Obtenir une offre par ID' })
+  @Public()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Obtenir une offre par ID',
+    description:
+      'Retourne une offre active. Les offres expirées renvoient 404 pour les utilisateurs anonymes et non-admins. ' +
+      'Un admin authentifié peut toujours consulter une offre expirée.',
+  })
   @ApiResponse({ status: 200, description: 'Offre trouvée' })
-  @ApiResponse({ status: 404, description: 'Offre non trouvée' })
-  findOne(@Param('id') id: string) {
-    return this.offersService.findOne(id);
+  @ApiResponse({ status: 404, description: 'Offre non trouvée ou expirée' })
+  findOne(@Param('id') id: string, @Request() req) {
+    const isAdmin = req.user?.role === 'ADMIN';
+    // Admins contournent le filtre d'expiration pour pouvoir gérer les offres passées
+    return isAdmin
+      ? this.offersService.findOne(id)
+      : this.offersService.findOnePublic(id);
   }
 
   @Get(':id/booked-dates')

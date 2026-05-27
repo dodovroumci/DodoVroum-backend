@@ -284,6 +284,33 @@ export class OffersService {
   }
 
   /**
+   * Version publique de findOne : lève une NotFoundException si l'offre est expirée
+   * ou désactivée. Destinée aux endpoints publics ; les admins contournent via findOne().
+   *
+   * Règles :
+   *   - statut: 'INACTIVE' → 404 "Offre non trouvée" (soft-deleted, ne pas révéler)
+   *   - statut: 'EXPIREE'  → 404 "Cette offre a expiré"
+   *   - statut: 'ACTIVE'   → retourne l'offre normalement
+   *
+   * Le statut est calculé par formatOfferResponse via computeOfferStatus(),
+   * donc aucun appel DB supplémentaire n'est nécessaire.
+   */
+  async findOnePublic(id: string) {
+    const offer = await this.findOne(id); // lève 404 si inexistante
+
+    if (offer.statut === 'INACTIVE') {
+      // Ne pas révéler l'existence d'une offre soft-deleted
+      throw new NotFoundException('Offre non trouvée');
+    }
+
+    if (offer.statut === 'EXPIREE') {
+      throw new NotFoundException('Cette offre a expiré');
+    }
+
+    return offer;
+  }
+
+  /**
    * Récupère toutes les plages de dates où l'offre combinée est réservée / occupée
    * (basé sur les réservations qui utilisent cette offre)
    */
