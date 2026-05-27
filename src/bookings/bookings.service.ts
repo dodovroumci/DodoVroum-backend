@@ -57,6 +57,22 @@ export class BookingsService {
       endDate: endDate.toISOString(),
     };
 
+    // Dispatcher : offre combinée vs réservation simple
+    if (createBookingDto.offerId) {
+      return this.createPackageReservation({
+        bookingData,
+        userId,
+        totalPrice,
+        amountToCharge,
+        startDate,
+        endDate,
+        paymentMethod,
+        overlapDto,
+        offerId: createBookingDto.offerId,
+      });
+    }
+
+    // Réservation simple (résidence ou véhicule seul)
     const booking = await this.prisma.$transaction(
       async (tx) => {
         await this.bookingValidationService.assertNoBlockingOverlapTx(tx, overlapDto);
@@ -95,6 +111,120 @@ export class BookingsService {
     const fullBooking = await this.findOneRaw(booking.id);
     await this.sendBookingNotification(fullBooking, userId, 'CREATED');
     return this.formatBookingResponse(fullBooking);
+  }
+
+  /**
+   * Crée une réservation d'offre combinée (package résidence + véhicule) et
+   * bloque immédiatement les deux assets dans la même transaction sérialisable.
+   *
+   * Flux dans la transaction :
+   *  1. assertNoBlockingOverlapTx  — verrou anti-doublon sérialisable
+   *  2. booking.create             — réservation principale
+   *  3. payment.create             — paiement associé
+   *  4. blockedDate.create ×2      — résidence + véhicule de l'offre
+   *
+   * Les BlockedDate sont liés au booking via bookingId (onDelete: Cascade),
+   * ce qui garantit leur suppression automatique si le booking est hard-deleted.
+   * Pour les annulations (status change), voir releasePackageBlockedDates().
+   */
+  private async createPackageReservation(params: {
+    bookingData: any;
+    userId: string;
+    totalPrice: number;
+    amountToCharge: number;
+    startDate: Date;
+    endDate: Date;
+    paymentMethod: any;
+    overlapDto: CreateBookingDto;
+    offerId: string;
+  }) {
+    const { bookingData, userId, totalPrice, amountToCharge, startDate, endDate, paymentMethod, overlapDto, offerId } = params;
+
+    // Lecture de l'offre avant la transaction (évite une requête imbriquée dans la tx)
+    const offer = await this.prisma.offer.findUnique({
+      where: { id: offerId },
+      select: { residenceId: true, vehicleId: true },
+    });
+
+    if (!offer) {
+      throw new BadRequestException('Offre non trouvée');
+    }
+
+    const booking = await this.prisma.$transaction(
+      async (tx) => {
+        // Verrou sérialisable : empêche les réservations concurrentes sur les mêmes dates
+        await this.bookingValidationService.assertNoBlockingOverlapTx(tx, overlapDto);
+
+        // 1. Créer la réservation package
+        const newBooking = await tx.booking.create({
+          data: {
+            ...bookingData,
+            userId,
+            totalPrice,
+            startDate,
+            endDate,
+            status: BookingStatus.AWAITING_PAYMENT,
+          } as Prisma.BookingUncheckedCreateInput,
+        });
+
+        // 2. Créer le paiement
+        await tx.payment.create({
+          data: {
+            amount: amountToCharge,
+            currency: 'XOF',
+            status: PaymentStatus.PENDING,
+            method: paymentMethod || PaymentMethod.CARD,
+            userId,
+            bookingId: newBooking.id,
+          },
+        });
+
+        // 3. Bloquer la résidence de l'offre
+        await tx.blockedDate.create({
+          data: {
+            residenceId: offer.residenceId,
+            startDate,
+            endDate,
+            bookingId: newBooking.id,
+            reason: 'RESERVATION',
+          },
+        });
+
+        // 4. Bloquer le véhicule de l'offre
+        await tx.blockedDate.create({
+          data: {
+            vehicleId: offer.vehicleId,
+            startDate,
+            endDate,
+            bookingId: newBooking.id,
+            reason: 'RESERVATION',
+          },
+        });
+
+        return newBooking;
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 5000,
+        timeout: 15000,
+      },
+    );
+
+    const fullBooking = await this.findOneRaw(booking.id);
+    await this.sendBookingNotification(fullBooking, userId, 'CREATED');
+    return this.formatBookingResponse(fullBooking);
+  }
+
+  /**
+   * Libère les BlockedDate créés par createPackageReservation().
+   * À appeler dans toute transition vers CANCELLED ou EXPIRED.
+   * (Le hard-delete via remove() est couvert par onDelete: Cascade.)
+   */
+  private async releasePackageBlockedDates(
+    tx: Prisma.TransactionClient,
+    bookingId: string,
+  ): Promise<void> {
+    await tx.blockedDate.deleteMany({ where: { bookingId } });
   }
 
   /**
@@ -261,10 +391,14 @@ export class BookingsService {
       throw new BadRequestException('Seule une réservation en attente peut être annulée.');
     }
 
-    const updated = await this.prisma.booking.update({
-      where: { id },
-      data: { status: BookingStatus.CANCELLED },
-      include: this.getBookingInclude(),
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // Libérer les dates bloquées (package) avant le changement de statut
+      await this.releasePackageBlockedDates(tx, id);
+      return tx.booking.update({
+        where: { id },
+        data: { status: BookingStatus.CANCELLED },
+        include: this.getBookingInclude(),
+      });
     });
 
     await this.sendBookingNotification(updated, userId, 'REJECTED', 'Annulée par le client');
@@ -294,11 +428,16 @@ export class BookingsService {
       throw new BadRequestException(`Impossible de rejeter une réservation en statut ${booking.status}.`);
     }
 
-    const updated = await this.prisma.booking.update({
-      where: { id },
-      data: { status: BookingStatus.CANCELLED, notes: reason },
-      include: this.getBookingInclude(),
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // Libérer les dates bloquées (package) avant le changement de statut
+      await this.releasePackageBlockedDates(tx, id);
+      return tx.booking.update({
+        where: { id },
+        data: { status: BookingStatus.CANCELLED, notes: reason },
+        include: this.getBookingInclude(),
+      });
     });
+
     await this.sendBookingNotification(updated, updated.userId, 'REJECTED', reason);
     return this.formatBookingResponse(updated);
   }

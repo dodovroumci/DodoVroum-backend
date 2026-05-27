@@ -48,6 +48,12 @@ export class BookingCleanupService {
         data: { status: BookingStatus.EXPIRED },
       });
 
+      // Libérer les dates bloquées des packages expirés
+      // (le onDelete: Cascade ne joue que sur hard-delete ; ici c'est un changement de statut)
+      await this.prisma.blockedDate.deleteMany({
+        where: { bookingId: { in: bookingIds } },
+      });
+
       const expiredRows = await this.prisma.booking.findMany({
         where: {
           id: { in: bookingIds },

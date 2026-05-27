@@ -187,6 +187,7 @@ model Booking {
   residence        Residence?    @relation(fields: [residenceId], references: [id])
   user             User          @relation(fields: [userId], references: [id])
   vehicle          Vehicle?      @relation(fields: [vehicleId], references: [id])
+  blockedDates     BlockedDate[]
   payments         Payment[]
   reviews          Review[]
 
@@ -319,6 +320,7 @@ model BlockedDate {
   id          String     @id @default(cuid())
   residenceId String?
   vehicleId   String?
+  bookingId   String?
   startDate   DateTime
   endDate     DateTime
   reason      String?
@@ -326,9 +328,11 @@ model BlockedDate {
   updatedAt   DateTime   @updatedAt
   residence   Residence? @relation(fields: [residenceId], references: [id], onDelete: Cascade)
   vehicle     Vehicle?   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  booking     Booking?   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
   @@index([residenceId])
   @@index([vehicleId])
+  @@index([bookingId])
   @@index([startDate])
   @@index([endDate])
   @@map("blocked_dates")
