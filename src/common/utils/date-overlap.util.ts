@@ -110,11 +110,16 @@ export function buildDateOverlapCondition(start: Date, end: Date) {
 // Helpers de formatage pour les messages d'erreur lisibles.
 // ---------------------------------------------------------------------------
 
-/** Formate une date en "1 juin 2024" (fr-FR). */
+/**
+ * Formate une date en "1 juin 2024" (fr-FR) en utilisant la valeur UTC.
+ * `timeZone: 'UTC'` garantit qu'aucune conversion locale ne décale le jour affiché,
+ * quelle que soit la timezone du serveur.
+ */
 export function formatDateFR(date: Date): string {
   return date.toLocaleDateString('fr-FR', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
+    timeZone: 'UTC',
   });
 }

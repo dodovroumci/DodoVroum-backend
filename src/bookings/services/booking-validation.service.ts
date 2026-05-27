@@ -42,18 +42,20 @@ export class BookingValidationService {
     const start = new Date(startDate);
     const end = new Date(endDate);
     const now = new Date();
-    
-    // Réinitialiser les heures pour comparer uniquement les dates (sans heures/minutes/secondes)
-    const startDateOnly = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-    const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    // Vérifier que les dates sont valides
+    // Vérifier que les dates sont valides avant tout autre traitement
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       throw new BadRequestException('Format de date invalide');
     }
 
+    // Tronquer à la journée UTC (Date.UTC évite tout décalage de timezone locale).
+    // new Date('2024-06-01') est déjà UTC midnight, mais si l'API reçoit une datetime
+    // avec heure (ex: '2024-06-01T14:00:00Z'), on ne doit comparer que les jours.
+    const startDayUtc = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+    const nowDayUtc   = Date.UTC(now.getUTCFullYear(),   now.getUTCMonth(),   now.getUTCDate());
+
     // Vérifier que la date de début est aujourd'hui ou dans le futur (on permet aujourd'hui)
-    if (startDateOnly < nowDateOnly) {
+    if (startDayUtc < nowDayUtc) {
       throw new BadRequestException('La date de début ne peut pas être dans le passé');
     }
 
