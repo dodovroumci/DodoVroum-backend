@@ -249,8 +249,6 @@ export class ResidencesService {
   }
 
   async getBookedDates(residenceId: string): Promise<{ start: string; end: string }[]> {
-    console.log('🔥 RES GET booked-dates residenceId=', residenceId);
-
     // ── Source 1 : réservations directes (booking.residenceId = param)
     // Les bookings simples n'écrivent PAS dans blocked_dates → source obligatoire.
     const activeStatuses = [
@@ -263,12 +261,8 @@ export class ResidencesService {
 
     const activeBookings = await this.prisma.booking.findMany({
       where: { residenceId, status: { in: activeStatuses } },
-      select: { id: true, startDate: true, endDate: true, status: true },
+      select: { id: true, startDate: true, endDate: true },
     });
-    console.log(
-      '🔥 RES activeBookings count=', activeBookings.length,
-      activeBookings.map((b) => ({ id: b.id, status: b.status, start: b.startDate, end: b.endDate })),
-    );
 
     // ── Source 2 : blocked_dates (packages + blocs manuels propriétaire)
     // Pour les packages, booking.residenceId peut être null ; seule blocked_dates a residenceId.
@@ -277,10 +271,6 @@ export class ResidencesService {
       select: { bookingId: true, startDate: true, endDate: true },
       orderBy: { startDate: 'asc' },
     });
-    console.log(
-      '🔥 RES blockedDates count=', blockedDates.length,
-      JSON.stringify(blockedDates),
-    );
 
     // ── Fusion sans doublon sur bookingId
     const coveredByBooking = new Set(activeBookings.map((b) => b.id));
@@ -293,7 +283,6 @@ export class ResidencesService {
     const grouped = new Map<string, { startDate: Date; endDate: Date }[]>();
     for (const bd of blockedDates) {
       if (bd.bookingId && coveredByBooking.has(bd.bookingId)) {
-        console.log('🔥 RES blocked_date skipped (already in activeBookings) bookingId=', bd.bookingId);
         continue;
       }
       const key = bd.bookingId ?? `manual_${bd.startDate.toISOString()}`;
@@ -321,7 +310,6 @@ export class ResidencesService {
     });
 
     const ranges = [...rangesFromBookings, ...rangesFromBlocked];
-    console.log('🔥 RES ranges computed=', ranges.length, JSON.stringify(ranges));
     return ranges;
   }
 
