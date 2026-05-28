@@ -7,6 +7,7 @@ import { UpdateOfferDto } from './dto/update-offer.dto';
 import { ResidencesService } from '../residences/residences.service';
 import { VehiclesService } from '../vehicles/vehicles.service';
 import { activeOfferWhere, nonDeletedOfferWhere, computeOfferStatus, OfferStatus } from './offer-filters';
+import { BookingStatus } from '@prisma/client';
 
 @Injectable()
 export class OffersService {
@@ -314,8 +315,9 @@ export class OffersService {
    * Récupère toutes les plages de dates où l'offre combinée est réservée / occupée
    * (basé sur les réservations qui utilisent cette offre)
    */
-  async getOccupiedDateRanges(offerId: string) {
-    // Vérifier que l'offre existe
+  async getOccupiedDateRanges(offerId: string): Promise<{ start: string; end: string }[]> {
+    console.log('🔥 OFFERS booked-dates offerId=', offerId);
+
     const offer = await this.prisma.offer.findUnique({
       where: { id: offerId },
       select: { id: true },
@@ -325,38 +327,83 @@ export class OffersService {
       throw new NotFoundException('Offre non trouvée');
     }
 
-    const bookings = await this.prisma.booking.findMany({
-      where: {
-        offerId,
-        status: {
-          in: [
-            'PENDING',
-            'AWAITING_PAYMENT',
-            'CONFIRMED',
-            'CONFIRMEE',
-            'CHECKIN_CLIENT',
-            'CHECKIN_PROPRIO',
-            'EN_COURS_SEJOUR',
-          ],
-        },
-      },
-      select: {
-        id: true,
-        startDate: true,
-        endDate: true,
-        status: true,
-      },
-      orderBy: {
-        startDate: 'asc',
-      },
+    // ── Source 1 : réservations directes sur cette offre
+    const activeStatuses = [
+      BookingStatus.AWAITING_PAYMENT,
+      BookingStatus.PENDING,
+      BookingStatus.PAID,
+      BookingStatus.CONFIRMED,
+      BookingStatus.ONGOING,
+    ];
+
+    const activeBookings = await this.prisma.booking.findMany({
+      where: { offerId, status: { in: activeStatuses } },
+      select: { id: true, startDate: true, endDate: true, status: true },
+      orderBy: { startDate: 'asc' },
+    });
+    console.log(
+      '🔥 OFFERS activeBookings count=', activeBookings.length,
+      activeBookings.map((b) => ({ id: b.id, status: b.status, start: b.startDate, end: b.endDate })),
+    );
+
+    // ── Source 2 : blocked_dates liées aux bookings de cette offre
+    // (blocked_dates n'a pas de colonne offerId — on passe par bookingId)
+    const bookingIds = activeBookings.map((b) => b.id);
+
+    const blockedDates = bookingIds.length > 0
+      ? await this.prisma.blockedDate.findMany({
+          where: { bookingId: { in: bookingIds } },
+          select: { bookingId: true, startDate: true, endDate: true },
+          orderBy: { startDate: 'asc' },
+        })
+      : [];
+    console.log(
+      '🔥 OFFERS blockedDates count=', blockedDates.length,
+      JSON.stringify(blockedDates),
+    );
+
+    // ── Fusion sans doublon sur bookingId
+    // Les blocked_dates de package ont les mêmes dates que leur booking —
+    // on les intègre uniquement si leur bookingId n'est pas déjà couvert.
+    const coveredByBooking = new Set(activeBookings.map((b) => b.id));
+
+    const rangesFromBookings: { start: string; end: string }[] = activeBookings.map((b) => ({
+      start: b.startDate.toISOString().split('T')[0],
+      end: b.endDate.toISOString().split('T')[0],
+    }));
+
+    const grouped = new Map<string, { startDate: Date; endDate: Date }[]>();
+    for (const bd of blockedDates) {
+      if (bd.bookingId && coveredByBooking.has(bd.bookingId)) {
+        continue;
+      }
+      const key = bd.bookingId ?? `manual_${bd.startDate.toISOString()}`;
+      const group = grouped.get(key);
+      if (group) {
+        group.push({ startDate: bd.startDate, endDate: bd.endDate });
+      } else {
+        grouped.set(key, [{ startDate: bd.startDate, endDate: bd.endDate }]);
+      }
+    }
+
+    const rangesFromBlocked = Array.from(grouped.values()).map((dates) => {
+      const start = dates.reduce(
+        (min, d) => (d.startDate < min ? d.startDate : min),
+        dates[0].startDate,
+      );
+      const end = dates.reduce(
+        (max, d) => (d.endDate > max ? d.endDate : max),
+        dates[0].endDate,
+      );
+      return {
+        start: start.toISOString().split('T')[0],
+        end: end.toISOString().split('T')[0],
+      };
     });
 
-    return bookings.map((b) => ({
-      id: b.id,
-      startDate: b.startDate,
-      endDate: b.endDate,
-      status: b.status,
-    }));
+    const ranges = [...rangesFromBookings, ...rangesFromBlocked];
+    console.log('🔥 OFFERS ranges computed=', ranges.length, JSON.stringify(ranges));
+    return ranges;
   }
 
   /**
