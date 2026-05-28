@@ -7,6 +7,7 @@ import { AppLoggerService } from '../logging/app-logger.service';
 import { CreateResidenceDto } from './dto/create-residence.dto';
 import { UpdateResidenceDto } from './dto/update-residence.dto';
 import { BlockDateDto } from './dto/block-date.dto';
+import { BookingStatus } from '@prisma/client';
 
 interface ResidencesQueryOptions extends PaginationOptions {
   type?: string;
@@ -247,49 +248,81 @@ export class ResidencesService {
     };
   }
 
-  /**
-   * @description Récupère TOUTES les dates bloquées (Format YYYY-MM-DD)
-   * C'est ici qu'on ajoute la logique "Self-Healing" pour le calendrier
-   */
-  async getBookedDates(residenceId: string): Promise<string[]> {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  async getBookedDates(residenceId: string): Promise<{ start: string; end: string }[]> {
+    console.log('🔥 RES GET booked-dates residenceId=', residenceId);
 
-    const [bookings, blockedDates] = await Promise.all([
-      this.prisma.booking.findMany({
-        where: {
-          residenceId,
-          // ONGARDE UNILATERALE : On bloque tout ce qui n'est pas annulé
-          // Si tu as un statut spécifique comme 'EN_COURS' ou 'COMPLETED', ajoute-le ici
-          status: { in: ['CONFIRMED', 'PENDING', 'AWAITING_PAYMENT', 'PAID', 'CONFIRMEE'] },
-          endDate: { gte: today }
-        },
-        select: { startDate: true, endDate: true }
-      }),
-      this.prisma.blockedDate.findMany({
-        where: { residenceId, endDate: { gte: today } },
-        select: { startDate: true, endDate: true }
-      })
-    ]);
+    // ── Source 1 : réservations directes (booking.residenceId = param)
+    // Les bookings simples n'écrivent PAS dans blocked_dates → source obligatoire.
+    const activeStatuses = [
+      BookingStatus.AWAITING_PAYMENT,
+      BookingStatus.PENDING,
+      BookingStatus.PAID,
+      BookingStatus.CONFIRMED,
+      BookingStatus.ONGOING,
+    ];
 
-    const disabledDates = new Set<string>();
-    
-    const fillDates = (start: Date, end: Date) => {
-      let current = new Date(start);
-      current.setHours(0, 0, 0, 0);
-      const last = new Date(end);
-      last.setHours(0, 0, 0, 0);
+    const activeBookings = await this.prisma.booking.findMany({
+      where: { residenceId, status: { in: activeStatuses } },
+      select: { id: true, startDate: true, endDate: true, status: true },
+    });
+    console.log(
+      '🔥 RES activeBookings count=', activeBookings.length,
+      activeBookings.map((b) => ({ id: b.id, status: b.status, start: b.startDate, end: b.endDate })),
+    );
 
-      while (current <= last) {
-        disabledDates.add(current.toISOString().split('T')[0]);
-        current.setDate(current.getDate() + 1);
+    // ── Source 2 : blocked_dates (packages + blocs manuels propriétaire)
+    // Pour les packages, booking.residenceId peut être null ; seule blocked_dates a residenceId.
+    const blockedDates = await this.prisma.blockedDate.findMany({
+      where: { residenceId },
+      select: { bookingId: true, startDate: true, endDate: true },
+      orderBy: { startDate: 'asc' },
+    });
+    console.log(
+      '🔥 RES blockedDates count=', blockedDates.length,
+      JSON.stringify(blockedDates),
+    );
+
+    // ── Fusion sans doublon sur bookingId
+    const coveredByBooking = new Set(activeBookings.map((b) => b.id));
+
+    const rangesFromBookings: { start: string; end: string }[] = activeBookings.map((b) => ({
+      start: b.startDate.toISOString().split('T')[0],
+      end: b.endDate.toISOString().split('T')[0],
+    }));
+
+    const grouped = new Map<string, { startDate: Date; endDate: Date }[]>();
+    for (const bd of blockedDates) {
+      if (bd.bookingId && coveredByBooking.has(bd.bookingId)) {
+        console.log('🔥 RES blocked_date skipped (already in activeBookings) bookingId=', bd.bookingId);
+        continue;
       }
-    };
+      const key = bd.bookingId ?? `manual_${bd.startDate.toISOString()}`;
+      const group = grouped.get(key);
+      if (group) {
+        group.push({ startDate: bd.startDate, endDate: bd.endDate });
+      } else {
+        grouped.set(key, [{ startDate: bd.startDate, endDate: bd.endDate }]);
+      }
+    }
 
-    bookings.forEach(b => fillDates(b.startDate, b.endDate));
-    blockedDates.forEach(b => fillDates(b.startDate, b.endDate));
+    const rangesFromBlocked = Array.from(grouped.values()).map((dates) => {
+      const start = dates.reduce(
+        (min, d) => (d.startDate < min ? d.startDate : min),
+        dates[0].startDate,
+      );
+      const end = dates.reduce(
+        (max, d) => (d.endDate > max ? d.endDate : max),
+        dates[0].endDate,
+      );
+      return {
+        start: start.toISOString().split('T')[0],
+        end: end.toISOString().split('T')[0],
+      };
+    });
 
-    return Array.from(disabledDates).sort();
+    const ranges = [...rangesFromBookings, ...rangesFromBlocked];
+    console.log('🔥 RES ranges computed=', ranges.length, JSON.stringify(ranges));
+    return ranges;
   }
 
   // --- WRITE METHODS ---
