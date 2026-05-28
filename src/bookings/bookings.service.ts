@@ -644,6 +644,22 @@ private formatBookingResponse(booking: any) {
 
     const isAwaitingPayment = normalizedStatus === BookingStatus.AWAITING_PAYMENT;
 
+    // Résolution du propriétaire : résidence > véhicule > résidence de l'offre
+    const owner =
+      booking.residence?.owner ||
+      booking.vehicle?.owner ||
+      booking.offer?.residence?.owner ||
+      null;
+    const ownerName = owner
+      ? `${owner.firstName ?? ''} ${owner.lastName ?? ''}`.trim() || 'Propriétaire indisponible'
+      : 'Propriétaire indisponible';
+    const ownerPhone = owner?.phone ?? null;
+    const ownerId =
+      owner?.id ??
+      booking.residence?.ownerId ??
+      booking.vehicle?.ownerId ??
+      null;
+
     return {
       id: booking.id,
       residence: booking.residence ? {
@@ -683,6 +699,9 @@ private formatBookingResponse(booking: any) {
       checkOutDate: booking.endDate,
       clientId: booking.userId,
       clientName: booking.user ? `${booking.user.firstName} ${booking.user.lastName}` : 'Client Inconnu',
+      ownerName,
+      ownerPhone,
+      ownerId,
       createdAt: booking.createdAt
     };
   }

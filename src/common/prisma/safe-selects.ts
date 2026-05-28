@@ -69,6 +69,8 @@ export const safeResidenceSelect = {
   isActive: true,
   latitude: true,
   longitude: true,
+  ownerId: true,
+  owner: { select: safeOwnerSelect },
 } as const;
 
 /** Vehicle embedded in bookings, favorites, offers. */
@@ -87,6 +89,8 @@ export const safeVehicleSelect = {
   capacity: true,
   isVerified: true,
   isActive: true,
+  ownerId: true,
+  owner: { select: safeOwnerSelect },
 } as const;
 
 /** Offer embedded in favorites. */
