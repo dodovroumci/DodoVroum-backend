@@ -663,7 +663,7 @@ private formatBookingResponse(booking: any) {
         titre: booking.offer.title,
         imageUrl: booking.offer.imageUrl || this.getFirstImage(booking.offer.residence?.images),
       } : null,
-      residenceImage: this.getFirstImage(booking.residence?.images) || this.getFirstImage(booking.vehicle?.images),
+      residenceImage: booking.offer?.imageUrl || this.getFirstImage(booking.residence?.images) || this.getFirstImage(booking.vehicle?.images),
       totalPrice: booking.totalPrice,
       totalPaid,
       status: statusMap[booking.status] || booking.status.toLowerCase(),
