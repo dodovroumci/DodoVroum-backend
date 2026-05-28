@@ -217,6 +217,50 @@ export class VehiclesService {
     return this.findAll(query);
   }
 
+  async getVehicleBookedRanges(vehicleId: string): Promise<{ start: string; end: string }[]> {
+    console.log('🔥 GET booked-dates vehicleId=', vehicleId);
+
+    const blockedDates = await this.prisma.blockedDate.findMany({
+      where: { vehicleId },
+      select: { bookingId: true, startDate: true, endDate: true },
+      orderBy: { startDate: 'asc' },
+    });
+
+    console.log('🔥 blockedDates count=', blockedDates.length);
+
+    if (blockedDates.length === 0) return [];
+
+    // Group by bookingId; records without bookingId are treated as individual ranges
+    const grouped = new Map<string, { startDate: Date; endDate: Date }[]>();
+    for (const bd of blockedDates) {
+      const key = bd.bookingId ?? `manual_${bd.startDate.toISOString()}`;
+      const group = grouped.get(key);
+      if (group) {
+        group.push({ startDate: bd.startDate, endDate: bd.endDate });
+      } else {
+        grouped.set(key, [{ startDate: bd.startDate, endDate: bd.endDate }]);
+      }
+    }
+
+    const ranges = Array.from(grouped.values()).map((dates) => {
+      const start = dates.reduce(
+        (min, d) => (d.startDate < min ? d.startDate : min),
+        dates[0].startDate,
+      );
+      const end = dates.reduce(
+        (max, d) => (d.endDate > max ? d.endDate : max),
+        dates[0].endDate,
+      );
+      return {
+        start: start.toISOString().split('T')[0],
+        end: end.toISOString().split('T')[0],
+      };
+    });
+
+    console.log('🔥 ranges computed=', ranges.length);
+    return ranges;
+  }
+
   async remove(id: string) {
     return await this.prisma.vehicle.delete({ where: { id } });
   }

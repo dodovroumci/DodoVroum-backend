@@ -56,6 +56,13 @@ export class VehiclesController {
     return this.vehiclesService.findAllTypes();
   }
 
+  @Get(':vehicleId/booked-dates')
+  @Public()
+  @ApiOperation({ summary: 'Retourne les plages de dates bloquées pour un véhicule' })
+  async getBookedDates(@Param('vehicleId') vehicleId: string) {
+    return this.vehiclesService.getVehicleBookedRanges(vehicleId);
+  }
+
   @Patch(':id')
   @UseGuards(JwtAuthGuard, VehicleOwnerGuard)
   @ApiBearerAuth()
