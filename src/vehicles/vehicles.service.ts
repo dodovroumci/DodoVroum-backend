@@ -10,7 +10,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { safeOwnerSelect } from '../common/prisma/safe-selects';
 import { VehiclesQueryDto } from './dto/vehicles-query.dto';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
-import { VehicleType, Prisma } from '@prisma/client';
+import { VehicleType, Prisma, BookingStatus } from '@prisma/client';
 
 @Injectable()
 export class VehiclesService {
@@ -220,19 +220,52 @@ export class VehiclesService {
   async getVehicleBookedRanges(vehicleId: string): Promise<{ start: string; end: string }[]> {
     console.log('🔥 GET booked-dates vehicleId=', vehicleId);
 
+    // ── Source 1 : réservations simples (booking.vehicleId = param)
+    // Les bookings simples n'écrivent PAS dans blocked_dates → source obligatoire.
+    const activeStatuses = [
+      BookingStatus.AWAITING_PAYMENT,
+      BookingStatus.PENDING,
+      BookingStatus.PAID,
+      BookingStatus.CONFIRMED,
+      BookingStatus.ONGOING,
+    ];
+
+    const activeBookings = await this.prisma.booking.findMany({
+      where: { vehicleId, status: { in: activeStatuses } },
+      select: { id: true, startDate: true, endDate: true, status: true },
+    });
+    console.log(
+      '🔥 activeBookings count=', activeBookings.length,
+      activeBookings.map((b) => ({ id: b.id, status: b.status, start: b.startDate, end: b.endDate })),
+    );
+
+    // ── Source 2 : blocked_dates (réservations package + blocs manuels)
+    // Pour les packages, booking.vehicleId peut être null ; seule blocked_dates a vehicleId.
     const blockedDates = await this.prisma.blockedDate.findMany({
       where: { vehicleId },
       select: { bookingId: true, startDate: true, endDate: true },
       orderBy: { startDate: 'asc' },
     });
+    console.log(
+      '🔥 blockedDates count=', blockedDates.length,
+      JSON.stringify(blockedDates),
+    );
 
-    console.log('🔥 blockedDates count=', blockedDates.length);
+    // ── Fusion des deux sources sans doublon sur bookingId
+    const coveredByBooking = new Set(activeBookings.map((b) => b.id));
 
-    if (blockedDates.length === 0) return [];
+    const rangesFromBookings: { start: string; end: string }[] = activeBookings.map((b) => ({
+      start: b.startDate.toISOString().split('T')[0],
+      end: b.endDate.toISOString().split('T')[0],
+    }));
 
-    // Group by bookingId; records without bookingId are treated as individual ranges
+    // Grouper les blocked_dates non déjà couvertes par activeBookings
     const grouped = new Map<string, { startDate: Date; endDate: Date }[]>();
     for (const bd of blockedDates) {
+      if (bd.bookingId && coveredByBooking.has(bd.bookingId)) {
+        console.log('🔥 blocked_date skipped (already in activeBookings) bookingId=', bd.bookingId);
+        continue;
+      }
       const key = bd.bookingId ?? `manual_${bd.startDate.toISOString()}`;
       const group = grouped.get(key);
       if (group) {
@@ -242,7 +275,7 @@ export class VehiclesService {
       }
     }
 
-    const ranges = Array.from(grouped.values()).map((dates) => {
+    const rangesFromBlocked = Array.from(grouped.values()).map((dates) => {
       const start = dates.reduce(
         (min, d) => (d.startDate < min ? d.startDate : min),
         dates[0].startDate,
@@ -257,7 +290,8 @@ export class VehiclesService {
       };
     });
 
-    console.log('🔥 ranges computed=', ranges.length);
+    const ranges = [...rangesFromBookings, ...rangesFromBlocked];
+    console.log('🔥 ranges computed=', ranges.length, JSON.stringify(ranges));
     return ranges;
   }
 
