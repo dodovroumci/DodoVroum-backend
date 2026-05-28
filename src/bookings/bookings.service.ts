@@ -589,9 +589,11 @@ export class BookingsService {
       residence: { select: safeResidenceSelect },
       vehicle: { select: safeVehicleSelect },
       offer: {
-        include: {
+        select: {
+          id: true,
+          title: true,
+          imageUrl: true,
           residence: { select: safeResidenceSelect },
-          vehicle: { select: safeVehicleSelect },
         },
       },
       payments: true,
