@@ -98,47 +98,50 @@ export class ResidencesService {
     const where: any = { isActive: isActive !== undefined ? isActive : true };
 
     if (proprietaireId) where.ownerId = proprietaireId;
-    if (type) where.typeResidence = { contains: type, mode: 'insensitive' };
+    if (type) where.typeResidence = { contains: type };
     if (search) {
       where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { city: { contains: search, mode: 'insensitive' } }
+        { title: { contains: search } },
+        { city: { contains: search } },
       ];
     }
 
-    const [residences, total] = await Promise.all([
-      this.prisma.residence.findMany({ 
-        where, 
-        skip, 
-        take: limit, 
-        orderBy: { [sortBy]: sortOrder },
-        include: { reviews: true } // ✅ On inclut les avis
-      }),
-      this.prisma.residence.count({ where }),
-    ]);
+    try {
+      const [residences, total] = await Promise.all([
+        this.prisma.residence.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { [sortBy]: sortOrder },
+          include: { reviews: true },
+        }),
+        this.prisma.residence.count({ where }),
+      ]);
 
-    const data = await Promise.all(residences.map(async (res) => {
-      const images = this.parseImages(res.images);
-      const reviews = res.reviews || [];
-      
-      // ✅ Calcul de la moyenne pour Flutter
-      const avg = reviews.length > 0 
-        ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length 
-        : null;
+      const data = await Promise.all(residences.map(async (res) => {
+        const images = this.parseImages(res.images);
+        const reviews = res.reviews || [];
+        const avg = reviews.length > 0
+          ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+          : null;
 
-      return {
-        ...res,
-        nom: res.title,
-        prixParNuit: res.pricePerDay,
-        imageUrl: images[0],
-        images: images,
-        averageRating: avg ? parseFloat(avg.toFixed(1)) : null, // ✅ Clé lue par ton code Flutter
-        reviewsCount: reviews.length,
-        isAvailable: !(await this.isResidenceOccupied(res.id))
-      };
-    }));
+        return {
+          ...res,
+          nom: res.title,
+          prixParNuit: res.pricePerDay,
+          imageUrl: images[0],
+          images,
+          averageRating: avg ? parseFloat(avg.toFixed(1)) : null,
+          reviewsCount: reviews.length,
+          isAvailable: !(await this.isResidenceOccupied(res.id)),
+        };
+      }));
 
-    return { data, pagination: this.paginationService.calculatePaginationMeta(page, limit, total) };
+      return { data, pagination: this.paginationService.calculatePaginationMeta(page, limit, total) };
+    } catch (error) {
+      this.logger.error(`Erreur findAll résidences: ${error.message}`, error.stack);
+      throw new InternalServerErrorException(`Récupération échouée: ${error.message}`);
+    }
   }
 
   async findOne(id: string) {
