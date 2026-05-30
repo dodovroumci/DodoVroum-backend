@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -55,7 +55,16 @@ export class UsersService {
     try {
       const data = { ...createUserDto };
 
-      // Sécurité : Hashage automatique si un password est présent
+      // Normalisation de l'email avant toute vérification
+      if (data.email) data.email = data.email.toLowerCase().trim();
+
+      // Vérification d'unicité — évite que le catch générique avale le P2002
+      const existing = await this.prisma.user.findUnique({
+        where: { email: data.email },
+        select: { id: true },
+      });
+      if (existing) throw new ConflictException('Cet email est déjà utilisé.');
+
       if (data.password) {
         const salt = await bcrypt.genSalt(this.BCRYPT_SALT_ROUNDS);
         data.password = await bcrypt.hash(data.password, salt);
@@ -67,6 +76,7 @@ export class UsersService {
       });
       return this.normalizeUser(user);
     } catch (error) {
+      if (error instanceof ConflictException) throw error;
       this.logger.error(`[CREATE_USER_ERROR] ${error.message}`);
       throw new BadRequestException("Erreur lors de la création de l'utilisateur");
     }
