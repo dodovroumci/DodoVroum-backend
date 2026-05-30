@@ -128,6 +128,7 @@ export class ResidencesController {
   @ApiResponse({ status: 403, description: 'Accès interdit - Vous n\'êtes pas propriétaire de cette résidence' })
   @ApiResponse({ status: 404, description: 'Résidence non trouvée' })
   update(@Param('id') id: string, @Body() updateResidenceDto: UpdateResidenceDto) {
+    console.log('PAYLOAD_RECU_PAR_NESTJS:', JSON.stringify(updateResidenceDto, null, 2));
     return this.residencesService.update(id, updateResidenceDto);
   }
 
