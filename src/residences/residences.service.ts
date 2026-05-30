@@ -98,7 +98,10 @@ export class ResidencesService {
     const where: any = { isActive: isActive !== undefined ? isActive : true };
 
     if (proprietaireId) where.ownerId = proprietaireId;
-    if (type) where.typeResidence = { contains: type.trim() };
+    if (type) {
+      console.log('Filtre appliqué pour type:', type.trim());
+      where.typeResidence = { contains: type.trim() };
+    }
     if (search) {
       where.OR = [
         { title: { contains: search } },
