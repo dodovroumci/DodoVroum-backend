@@ -61,6 +61,14 @@ export class ResidencesQueryDto extends IntersectionType(PaginationDto) {
   owner_id?: string;
 
   @ApiPropertyOptional({
+    example: 'villa',
+    description: 'Alias pour type (compatibilité dashboard)',
+  })
+  @IsOptional()
+  @IsString()
+  typeResidence?: string;
+
+  @ApiPropertyOptional({
     example: false,
     description: 'Filtrer par statut actif. true = actives uniquement (défaut), false = inactives uniquement',
   })

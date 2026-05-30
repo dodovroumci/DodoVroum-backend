@@ -59,6 +59,10 @@ export class ResidencesController {
       normalizedQuery.proprietaireId = normalizedQuery.owner_id;
       delete normalizedQuery.owner_id;
     }
+    if (normalizedQuery.typeResidence && !normalizedQuery.type) {
+      normalizedQuery.type = normalizedQuery.typeResidence;
+      delete normalizedQuery.typeResidence;
+    }
     return this.residencesService.findAll(normalizedQuery);
   }
 
