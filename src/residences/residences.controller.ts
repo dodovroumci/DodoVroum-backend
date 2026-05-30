@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, NotFoundException, UsePipes, ValidationPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ResidencesService } from './residences.service';
 import { CreateResidenceDto } from './dto/create-residence.dto';
@@ -123,6 +123,7 @@ export class ResidencesController {
   @Patch(':id')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, ResidenceOwnerGuard)
+  @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
   @ApiOperation({ summary: 'Mettre à jour une résidence' })
   @ApiResponse({ status: 200, description: 'Résidence mise à jour' })
   @ApiResponse({ status: 403, description: 'Accès interdit - Vous n\'êtes pas propriétaire de cette résidence' })
