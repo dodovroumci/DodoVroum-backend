@@ -15,7 +15,9 @@ export class ResidencesController {
   constructor(
     private readonly residencesService: ResidencesService,
     private readonly prisma: PrismaService,
-  ) {}
+  ) {
+    console.log('✅ ResidencesController chargé par NestJS');
+  }
 
   @Post()
   @ApiBearerAuth()
