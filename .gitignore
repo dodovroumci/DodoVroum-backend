@@ -44,3 +44,10 @@ uploads/
 # Database
 *.db
 *.sqlite
+.env
+*.save
+*.sql
+storage/
+public/
+tables_list.txt
+Gentlem@n*
