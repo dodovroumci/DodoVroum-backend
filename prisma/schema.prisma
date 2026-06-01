@@ -47,6 +47,7 @@ model User {
   reviews            Review[]
   vehicles           Vehicle[]
   notifications      Notification[]
+  devices            UserDevice[]
 
   @@index([email])
   @@index([isActive])
@@ -410,4 +411,16 @@ enum VerificationStatus {
   VERIFIED
   REJECTED
   UNDER_REVIEW
+}
+
+model UserDevice {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String
+  platform  String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, token])
+  @@map("user_devices")
 }
