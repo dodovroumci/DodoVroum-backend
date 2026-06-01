@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
 import { BookingStatus, Prisma } from '@prisma/client';
+import { differenceInCalendarDays } from 'date-fns';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateBookingDto } from '../dto/create-booking.dto';
 import {
@@ -448,8 +449,8 @@ export class BookingValidationService {
 
     const start = new Date(startDate);
     const end = new Date(endDate);
-    const diffTime = end.getTime() - start.getTime();
-    const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const rawDays = differenceInCalendarDays(end, start);
+    const days = rawDays <= 0 ? 1 : rawDays;
 
     if (offerId) {
       const offer = await this.prisma.offer.findUnique({
