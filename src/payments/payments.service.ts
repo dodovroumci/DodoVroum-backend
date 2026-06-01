@@ -25,13 +25,12 @@ export class PaymentsService {
     servername: 'pay.genius.ci',
   });
 
- constructor(
+  constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
   ) {
-    // ON IGNORE LE CONFIGSERVICE ET LE .ENV POUR CE TEST
-    this.GENIUS_API_URL = 'https://pay.genius.ci/api/v1/merchant/payments';
-    this.logger.log(`URL FORCÉE MANUELLEMENT : ${this.GENIUS_API_URL}`);
+    this.GENIUS_API_URL = this.config.get<string>('GENIUSPAY_API_URL');
+    this.logger.log(`URL GeniusPay utilisée : ${this.GENIUS_API_URL}`);
   }
 
   /**
