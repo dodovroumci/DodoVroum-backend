@@ -41,11 +41,18 @@ export class GeniusPaySignatureGuard implements CanActivate {
       throw new UnauthorizedException('Timestamp invalide ou expiré');
     }
 
-    // HMAC-SHA256: timestamp.body
-    const payload = JSON.stringify(request.body);
+    // HMAC-SHA256: timestamp.rawBody
+    // rawBody est le corps HTTP brut (Buffer), indispensable pour que le hash
+    // corresponde exactement à ce qu'a signé GeniusPay (JSON.stringify peut
+    // réordonner les clés et invalider la signature).
+    const rawBody: Buffer | undefined = (request as any).rawBody;
+    if (!rawBody) {
+      this.logger.error('rawBody indisponible — active rawBody:true dans NestFactory.create()');
+      throw new UnauthorizedException('Corps brut indisponible');
+    }
     const expected = crypto
       .createHmac('sha256', secret)
-      .update(`${timestamp}.${payload}`)
+      .update(`${timestamp}.${rawBody.toString('utf8')}`)
       .digest('hex');
 
     // Timing-safe comparison — prevents timing side-channel attacks

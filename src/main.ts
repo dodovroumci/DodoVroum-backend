@@ -7,7 +7,9 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
 
   // Derrière nginx / load balancer : req.ip et X-Forwarded-For fiables pour la whitelist webhook
   if (process.env.TRUST_PROXY === 'true' || process.env.TRUST_PROXY === '1') {
