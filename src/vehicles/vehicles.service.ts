@@ -189,14 +189,14 @@ export class VehiclesService {
 
     // 3. Filtres optionnels
     if (type) where.type = type;
-    if (brand) where.brand = { contains: brand, mode: 'insensitive' };
+    if (brand) where.brand = { contains: brand };
 
     // 4. Recherche textuelle
     if (search) {
       where.OR = [
-        { brand: { contains: search, mode: 'insensitive' } },
-        { model: { contains: search, mode: 'insensitive' } },
-        { plateNumber: { contains: search, mode: 'insensitive' } },
+        { brand: { contains: search } },
+        { model: { contains: search } },
+        { plateNumber: { contains: search } },
       ];
     }
 
