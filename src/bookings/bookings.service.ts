@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { safeBookingUserSelect, safeResidenceSelect, safeVehicleSelect } from '../common/prisma/safe-selects';
 import { BookingValidationService } from './services/booking-validation.service';
@@ -7,6 +7,7 @@ import { UpdateBookingDto } from './dto/update-booking.dto';
 import { UpdateBookingDatesDto } from './dto/update-booking-dates.dto';
 import { Prisma, NotificationType, PaymentStatus, PaymentMethod, BookingStatus } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
+import { FirebaseService } from '../notifications/firebase.service';
 
 /**
  * @class BookingsService
@@ -14,10 +15,13 @@ import { NotificationsService } from '../notifications/notifications.service';
  */
 @Injectable()
 export class BookingsService {
+  private readonly logger = new Logger(BookingsService.name);
+
   constructor(
     private prisma: PrismaService,
     private bookingValidationService: BookingValidationService,
     private notificationsService: NotificationsService,
+    private firebaseService: FirebaseService,
   ) {}
 
   // --- MÉTHODES DE CRÉATION ET MISE À JOUR ---
@@ -708,22 +712,34 @@ private formatBookingResponse(booking: any) {
 
   private async sendBookingNotification(booking: any, userId: string, type: string, reason?: string) {
     try {
-      const typeMap: Record<string, {title: string, msg: string}> = {
-        'CREATED': { title: 'Nouvelle réservation', msg: 'Votre demande est en attente de confirmation.' },
-        'APPROVED': { title: 'Réservation approuvée ! ✅', msg: 'Le propriétaire a confirmé votre séjour.' },
-        'REJECTED': { title: 'Réservation refusée', msg: reason || 'Votre demande n\'a pas pu être acceptée.' }
+      const typeMap: Record<string, { title: string; msg: string }> = {
+        CREATED:  { title: 'Nouvelle réservation',     msg: 'Votre demande est en attente de confirmation.' },
+        APPROVED: { title: 'Réservation approuvée !',  msg: 'Le propriétaire a confirmé votre séjour.' },
+        REJECTED: { title: 'Réservation refusée',      msg: reason ?? 'Votre demande n\'a pas pu être acceptée.' },
       };
-      const meta = typeMap[type] || { title: 'Mise à jour', msg: 'Le statut de votre réservation a changé.' };
+      const meta = typeMap[type] ?? { title: 'Mise à jour', msg: 'Le statut de votre réservation a changé.' };
 
       await this.notificationsService.createNotification(
         userId,
         meta.title,
         meta.msg,
         type === 'REJECTED' ? NotificationType.ERROR : NotificationType.INFO,
-        booking.id
+        booking.id,
       );
-    } catch (e) {
-      console.error('[BookingsService] Notify fail', e);
+
+      const bookingType: string = booking.vehicleId
+        ? 'VEHICLE_BOOKING'
+        : booking.residenceId
+        ? 'RESIDENCE_BOOKING'
+        : 'OFFER_BOOKING';
+
+      await this.firebaseService.sendNotification(userId, {
+        title: meta.title,
+        body:  meta.msg,
+        data:  { type: bookingType, bookingId: booking.id, event: type },
+      });
+    } catch (e: any) {
+      this.logger.error(`[BookingsService] sendBookingNotification fail: ${e.message}`);
     }
   }
 }
