@@ -23,9 +23,12 @@ SMTP_PORT=587
 SMTP_USER="votre-email@gmail.com"
 SMTP_PASS="votre-mot-de-passe-app"
 
-# Configuration paiement (optionnel pour plus tard)
-STRIPE_SECRET_KEY="sk_test_..."
-STRIPE_WEBHOOK_SECRET="whsec_..."
+# GeniusPay
+GENIUSPAY_API_KEY="votre-api-key"
+GENIUSPAY_API_SECRET="votre-api-secret"
+GENIUSPAY_API_URL="https://pay.genius.ci/public/api/v1/merchant/payments"
+GENIUSPAY_SUCCESS_URL="https://api.dodovroum.com/api/payments/redirect/success"
+GENIUSPAY_CANCEL_URL="https://api.dodovroum.com/api/payments/redirect/cancel"
 
 # Configuration CORS
 CORS_ORIGIN="http://localhost:3000,http://localhost:8080"

@@ -18,8 +18,7 @@ export class PaymentsService {
   private readonly DEPOSIT_PERCENTAGE = 0.3;
   private readonly MIN_AMOUNT_XOF = 200;
   
-  // Endpoint validé pour éviter les redirections 301/302
-  private readonly GENIUS_API_URL = 'https://pay.genius.ci/public/api/v1/merchant/payments';
+  private readonly GENIUS_API_URL: string;
 
   private readonly httpsAgent = new https.Agent({
     rejectUnauthorized: true,
@@ -29,7 +28,11 @@ export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-  ) {}
+  ) {
+    this.GENIUS_API_URL =
+      this.config.get<string>('GENIUSPAY_API_URL') ??
+      'https://pay.genius.ci/public/api/v1/merchant/payments';
+  }
 
   /**
    * Initialise un tunnel de paiement GeniusPay
