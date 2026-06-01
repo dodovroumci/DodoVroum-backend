@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Put, Param, Delete, UseGuards, Request, Query } from '@nestjs/common';
+import { Controller, Get, Patch, Put, Post, Body, Param, Delete, UseGuards, Request, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -9,6 +9,16 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @Controller('notifications')
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
+
+  @Post('register-token')
+  @ApiOperation({ summary: 'Enregistrer le token FCM de l\'appareil Flutter' })
+  @ApiResponse({ status: 201, description: 'Token enregistré' })
+  registerToken(
+    @Request() req,
+    @Body() body: { token: string; platform?: string },
+  ) {
+    return this.notificationsService.registerDeviceToken(req.user.id, body.token, body.platform);
+  }
 
   @Get()
   @ApiOperation({ summary: 'Récupérer toutes les notifications de l\'utilisateur connecté' })

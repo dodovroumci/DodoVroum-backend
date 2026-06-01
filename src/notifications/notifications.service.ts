@@ -125,6 +125,17 @@ export class NotificationsService {
   }
 
   /**
+   * Enregistre ou met à jour le token FCM d'un appareil
+   */
+  async registerDeviceToken(userId: string, token: string, platform?: string) {
+    return this.prisma.userDevice.upsert({
+      where: { userId_token: { userId, token } },
+      update: { platform },
+      create: { userId, token, platform },
+    });
+  }
+
+  /**
    * Supprime une notification
    */
   async deleteNotification(notificationId: string, userId: string) {

@@ -23,6 +23,9 @@ SMTP_PORT=587
 SMTP_USER="votre-email@gmail.com"
 SMTP_PASS="votre-mot-de-passe-app"
 
+# Firebase (push notifications)
+FIREBASE_CREDENTIALS_PATH=./firebase-service-account.json
+
 # GeniusPay
 GENIUSPAY_API_KEY="votre-api-key"
 GENIUSPAY_API_SECRET="votre-api-secret"
