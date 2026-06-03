@@ -31,7 +31,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         message = exceptionResponse;
         error = exception.name;
       } else {
-        message = (exceptionResponse as any).message || exceptionResponse;
+        const raw = (exceptionResponse as any).message || exceptionResponse;
+        message = Array.isArray(raw) ? raw.join('. ') : raw;
         error = (exceptionResponse as any).error || exception.name;
       }
     } else if ((exception as any)?.code === 'P2002') {

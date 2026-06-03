@@ -4,6 +4,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -34,11 +35,14 @@ async function bootstrap() {
     contentSecurityPolicy: false, 
   }));
 
-  // 3. Préfixe global pour les endpoints DATA
+  // 3. Filtre d'exceptions global — normalise message en string (Laravel dashboard attend string)
+  app.useGlobalFilters(new GlobalExceptionFilter());
+
+  // 4. Préfixe global pour les endpoints DATA
   // Toutes vos routes seront sous https://api.dodovroum.com/api/...
   app.setGlobalPrefix('api');
 
-  // 4. Pipes de validation
+  // 5. Pipes de validation
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
     transform: true,
