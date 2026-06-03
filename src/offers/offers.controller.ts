@@ -36,7 +36,6 @@ export class OffersController {
   @ApiOperation({ summary: 'Obtenir toutes les offres avec filtres optionnels' })
   @ApiResponse({ status: 200, description: 'Liste des offres' })
   findAll(@Query() query: OffersQueryDto) {
-    console.log('Query reçue par NestJS :', query);
     // Normaliser owner_id vers proprietaireId si nécessaire
     const normalizedQuery = { ...query };
     if (normalizedQuery.owner_id && !normalizedQuery.proprietaireId) {
