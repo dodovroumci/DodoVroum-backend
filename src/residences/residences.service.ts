@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { safeOwnerSelect, safePublicUserSelect } from '../common/prisma/safe-selects';
 import { PaginationService, PaginationOptions, PaginationResult } from '../common/services/pagination.service';
@@ -360,21 +360,13 @@ export class ResidencesService {
       throw new ForbiddenException("Vous n'êtes pas propriétaire de cette résidence.");
     }
 
-    const activeStatuses = [
-      BookingStatus.AWAITING_PAYMENT,
-      BookingStatus.PENDING,
-      BookingStatus.PAID,
-      BookingStatus.CONFIRMED,
-      BookingStatus.ONGOING,
-    ];
-
-    const hasActiveBookings = await this.prisma.booking.count({
-      where: { residenceId: id, status: { in: activeStatuses } },
+    const bookingCount = await this.prisma.booking.count({
+      where: { residenceId: id },
     });
 
-    if (hasActiveBookings > 0) {
-      throw new ConflictException(
-        'Impossible de supprimer : cette résidence possède des réservations actives.',
+    if (bookingCount > 0) {
+      throw new ForbiddenException(
+        `Cette résidence ne peut être supprimée car elle est liée à ${bookingCount} réservation(s).`,
       );
     }
 
