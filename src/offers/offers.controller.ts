@@ -42,10 +42,11 @@ export class OffersController {
       normalizedQuery.proprietaireId = normalizedQuery.owner_id;
       delete normalizedQuery.owner_id;
     }
-    const { proprietaireId, owner_id, ...paginationOptions } = normalizedQuery;
-    return this.offersService.findAll({ 
-      proprietaireId, 
-      ...paginationOptions 
+    const { proprietaireId, owner_id, status, ...paginationOptions } = normalizedQuery;
+    return this.offersService.findAll({
+      proprietaireId,
+      status,
+      ...paginationOptions,
     });
   }
 

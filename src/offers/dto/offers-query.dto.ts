@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, IsIn } from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 export class OffersQueryDto extends PaginationDto {
@@ -10,6 +10,15 @@ export class OffersQueryDto extends PaginationDto {
   @IsOptional()
   @IsString()
   proprietaireId?: string;
+
+  @ApiPropertyOptional({
+    example: 'active',
+    description: "Filtrer les offres par statut : 'active', 'inactive', 'expired'",
+    enum: ['active', 'inactive', 'expired'],
+  })
+  @IsOptional()
+  @IsIn(['active', 'inactive', 'expired'])
+  status?: string;
 
   // Propriété optionnelle pour accepter owner_id (alias de proprietaireId)
   // Normalisée dans le contrôleur vers proprietaireId

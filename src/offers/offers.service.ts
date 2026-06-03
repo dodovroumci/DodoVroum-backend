@@ -142,12 +142,11 @@ export class OffersService {
     return this.formatOfferResponse(created);
   }
 
-  async findAll(options?: { proprietaireId?: string } & PaginationOptions): Promise<PaginationResult<any> | any[]> {
-    const { proprietaireId, ...paginationOptions } = options || {};
+  async findAll(options?: { proprietaireId?: string; status?: string } & PaginationOptions): Promise<PaginationResult<any> | any[]> {
+    const { proprietaireId, status, ...paginationOptions } = options || {};
     const { page, limit, sortBy, sortOrder } = this.paginationService.validatePaginationOptions(paginationOptions);
-    
-    // Scope public : actives ET non expirées
-    const where: any = { ...activeOfferWhere() };
+
+    const where: any = this.buildStatusWhere(status);
 
     if (proprietaireId) {
       where.ownerId = proprietaireId;
@@ -374,6 +373,15 @@ export class OffersService {
   /**
    * Formate une offre selon le format attendu par le frontend
    */
+  private buildStatusWhere(status?: string): Record<string, any> {
+    switch (status) {
+      case 'inactive': return { isActive: false };
+      case 'expired':  return { isActive: true, validTo: { lt: new Date() } };
+      case 'active':   return { isActive: true, validTo: { gte: new Date() } };
+      default:         return { ...activeOfferWhere() };
+    }
+  }
+
   private formatOfferResponse(offer: any) {
     // Formater la résidence
     const residence = this.formatResidenceForOffer(offer.residence);
