@@ -13,11 +13,11 @@ export class OffersQueryDto extends PaginationDto {
 
   @ApiPropertyOptional({
     example: 'active',
-    description: "Filtrer les offres par statut : 'active', 'inactive', 'expired'",
-    enum: ['active', 'inactive', 'expired'],
+    description: "Filtrer les offres par statut : 'active', 'inactive', 'expired', 'expiree'",
+    enum: ['active', 'inactive', 'expired', 'expiree'],
   })
   @IsOptional()
-  @IsIn(['active', 'inactive', 'expired'])
+  @IsIn(['active', 'inactive', 'expired', 'expiree'])
   status?: string;
 
   // Propriété optionnelle pour accepter owner_id (alias de proprietaireId)

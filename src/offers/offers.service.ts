@@ -375,10 +375,15 @@ export class OffersService {
    */
   private buildStatusWhere(status?: string): Record<string, any> {
     switch (status) {
-      case 'inactive': return { isActive: false };
-      case 'expired':  return { isActive: true, validTo: { lt: new Date() } };
-      case 'active':   return { isActive: true, validTo: { gte: new Date() } };
-      default:         return { ...activeOfferWhere() };
+      case 'inactive':
+        return { isActive: false };
+      case 'expired':
+      case 'expiree':
+        return { isActive: true, validTo: { lt: new Date() } };
+      case 'active':
+        return { isActive: true, validTo: { gte: new Date() } };
+      default:
+        return { ...activeOfferWhere() };
     }
   }
 
