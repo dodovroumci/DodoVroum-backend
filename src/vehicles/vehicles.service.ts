@@ -283,7 +283,20 @@ export class VehiclesService {
     return ranges;
   }
 
-  async remove(id: string) {
-    return await this.prisma.vehicle.delete({ where: { id } });
+  async remove(id: string): Promise<void> {
+    const vehicle = await this.prisma.vehicle.findUnique({ where: { id } });
+    if (!vehicle) throw new NotFoundException('Véhicule introuvable.');
+
+    const bookingCount = await this.prisma.booking.count({
+      where: { vehicleId: id },
+    });
+
+    if (bookingCount > 0) {
+      throw new ForbiddenException(
+        `Ce véhicule ne peut être supprimé car il est lié à ${bookingCount} réservation(s).`,
+      );
+    }
+
+    await this.prisma.vehicle.delete({ where: { id } });
   }
 }
