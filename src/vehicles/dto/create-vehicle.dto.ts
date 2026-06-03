@@ -1,5 +1,24 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsNumber, IsOptional, IsArray, IsBoolean, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsOptional, IsArray, IsBoolean, IsEnum, Min } from 'class-validator';
+
+export enum VehicleTypeInput {
+  // Valeurs Prisma (majuscules)
+  CAR         = 'CAR',
+  SUV         = 'SUV',
+  MOTORCYCLE  = 'MOTORCYCLE',
+  BICYCLE     = 'BICYCLE',
+  SCOOTER     = 'SCOOTER',
+  VAN         = 'VAN',
+  TRUCK       = 'TRUCK',
+  // Alias Flutter / frontend (minuscules)
+  BERLINE     = 'berline',
+  CITADINE    = 'citadine',
+  LUXE        = 'luxe',
+  MOTO        = 'moto',
+  UTILITAIRE  = 'utilitaire',
+  FOURGON     = 'fourgon',
+  X4          = '4x4',
+}
 
 /**
  * DTO pour la création de véhicule.
@@ -21,8 +40,14 @@ export class CreateVehicleDto {
   @IsString()
   description?: string; // AJOUTÉ : Pour corriger l'erreur de build
 
-  @ApiProperty({ description: 'Type de véhicule', example: 'berline' })
-  @IsString()
+  @ApiProperty({
+    description: 'Type de véhicule',
+    enum: VehicleTypeInput,
+    example: 'berline',
+  })
+  @IsEnum(VehicleTypeInput, {
+    message: `type doit être l'une des valeurs : ${Object.values(VehicleTypeInput).join(', ')}`,
+  })
   @IsNotEmpty()
   type: string;
 
