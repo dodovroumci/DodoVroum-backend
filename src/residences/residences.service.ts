@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { safeOwnerSelect, safePublicUserSelect } from '../common/prisma/safe-selects';
 import { PaginationService, PaginationOptions, PaginationResult } from '../common/services/pagination.service';
@@ -349,13 +349,17 @@ export class ResidencesService {
     return updated;
   }
 
-  async remove(id: string, requestingUserId?: string): Promise<void> {
+  async remove(id: string, ownerId: string): Promise<void> {
     const residence = await this.prisma.residence.findUnique({
       where: { id },
       select: { id: true, ownerId: true },
     });
 
     if (!residence) throw new NotFoundException('Résidence introuvable.');
+
+    if (residence.ownerId !== ownerId) {
+      throw new ForbiddenException("Vous n'êtes pas propriétaire de cette résidence.");
+    }
 
     const activeStatuses = [
       BookingStatus.AWAITING_PAYMENT,
@@ -365,17 +369,17 @@ export class ResidencesService {
       BookingStatus.ONGOING,
     ];
 
-    const activeBookingsCount = await this.prisma.booking.count({
+    const hasActiveBookings = await this.prisma.booking.count({
       where: { residenceId: id, status: { in: activeStatuses } },
     });
 
-    if (activeBookingsCount > 0) {
-      throw new BadRequestException(
-        `Impossible de supprimer : ${activeBookingsCount} réservation(s) active(s) sur cette résidence.`,
+    if (hasActiveBookings > 0) {
+      throw new ConflictException(
+        'Impossible de supprimer : cette résidence possède des réservations actives.',
       );
     }
 
-    await this.prisma.residence.update({ where: { id }, data: { isActive: false } });
+    await this.prisma.residence.delete({ where: { id } });
   }
 
   async isOwner(residenceId: string, userId: string): Promise<boolean> {

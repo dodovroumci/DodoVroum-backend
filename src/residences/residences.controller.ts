@@ -142,8 +142,9 @@ export class ResidencesController {
   @ApiResponse({ status: 200, description: 'Résidence supprimée' })
   @ApiResponse({ status: 403, description: 'Accès interdit - Vous n\'êtes pas propriétaire de cette résidence' })
   @ApiResponse({ status: 404, description: 'Résidence non trouvée' })
-  remove(@Param('id') id: string) {
-    return this.residencesService.remove(id);
+  @ApiResponse({ status: 409, description: 'Résidence possède des réservations actives' })
+  remove(@Param('id') id: string, @Request() req) {
+    return this.residencesService.remove(id, req.user.id);
   }
 
   @Post(':id/blocked-dates')
