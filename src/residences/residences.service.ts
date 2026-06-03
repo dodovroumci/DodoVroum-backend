@@ -349,8 +349,33 @@ export class ResidencesService {
     return updated;
   }
 
-  async remove(id: string) {
-    return this.prisma.residence.update({ where: { id }, data: { isActive: false } });
+  async remove(id: string, requestingUserId?: string): Promise<void> {
+    const residence = await this.prisma.residence.findUnique({
+      where: { id },
+      select: { id: true, ownerId: true },
+    });
+
+    if (!residence) throw new NotFoundException('Résidence introuvable.');
+
+    const activeStatuses = [
+      BookingStatus.AWAITING_PAYMENT,
+      BookingStatus.PENDING,
+      BookingStatus.PAID,
+      BookingStatus.CONFIRMED,
+      BookingStatus.ONGOING,
+    ];
+
+    const activeBookingsCount = await this.prisma.booking.count({
+      where: { residenceId: id, status: { in: activeStatuses } },
+    });
+
+    if (activeBookingsCount > 0) {
+      throw new BadRequestException(
+        `Impossible de supprimer : ${activeBookingsCount} réservation(s) active(s) sur cette résidence.`,
+      );
+    }
+
+    await this.prisma.residence.update({ where: { id }, data: { isActive: false } });
   }
 
   async isOwner(residenceId: string, userId: string): Promise<boolean> {
