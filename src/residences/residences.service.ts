@@ -343,7 +343,6 @@ export class ResidencesService {
 
   async update(id: string, dto: UpdateResidenceDto) {
     const data = this.transformResidenceDto(dto);
-    console.log('DONNEES_AVANT_PRISMA:', data);
     const updated = await this.prisma.residence.update({ where: { id }, data });
     await this.cacheService.invalidateResidencesCache();
     return updated;
