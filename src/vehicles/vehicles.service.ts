@@ -174,6 +174,15 @@ export class VehiclesService {
 
   
 
+  async findOne(id: string) {
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { id },
+      include: { owner: { select: safeOwnerSelect } },
+    });
+    if (!vehicle) throw new NotFoundException('Véhicule introuvable.');
+    return vehicle;
+  }
+
   async findAll(query: any, ownerId?: string) {
     const { search, type, brand, isActive } = query;
     const where: any = {};

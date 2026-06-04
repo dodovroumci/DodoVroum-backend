@@ -56,6 +56,13 @@ export class VehiclesController {
     return this.vehiclesService.findAllTypes();
   }
 
+  @Get(':id')
+  @Public()
+  @ApiOperation({ summary: 'Récupère un véhicule par ID' })
+  async findOne(@Param('id') id: string) {
+    return this.vehiclesService.findOne(id);
+  }
+
   @Get(':vehicleId/booked-dates')
   @Public()
   @ApiOperation({ summary: 'Retourne les plages de dates bloquées pour un véhicule' })
