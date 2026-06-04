@@ -77,11 +77,9 @@ export class VehiclesService {
 
   // --- WRITE METHODS ---
 
-  async create(dto: CreateVehicleDto, user: any) {
-    const cleanData = this.transformVehicleData(dto);
-    const targetOwnerId = (user.role?.toLowerCase() === 'admin' && cleanData.ownerId) 
-      ? cleanData.ownerId 
-      : user.id;
+  async create(dto: CreateVehicleDto, ownerId: string) {
+    const { ownerId: _ownerId, ...dtoWithoutOwner } = dto as any;
+    const cleanData = this.transformVehicleData(dtoWithoutOwner);
 
     try {
       const vehicle = await this.prisma.vehicle.create({
@@ -102,8 +100,8 @@ export class VehiclesService {
           mileage: cleanData.mileage ? parseInt(cleanData.mileage.toString()) : null,
           features: JSON.stringify(cleanData.features || []),
           images: JSON.stringify(cleanData.images || []),
-          owner: { connect: { id: String(targetOwnerId) } }
-        }
+          owner: { connect: { id: String(ownerId) } },
+        },
       });
       return this.enrichVehicleResponse(vehicle);
     } catch (error) {

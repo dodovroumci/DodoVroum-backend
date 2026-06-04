@@ -12,6 +12,7 @@ import {
   HttpStatus,
   HttpCode,
   Patch,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { VehiclesService } from './vehicles.service';
@@ -48,7 +49,15 @@ export class VehiclesController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   async create(@Body() createVehicleDto: CreateVehicleDto, @GetUser() user: any) {
-    return this.vehiclesService.create(createVehicleDto, user);
+    const targetOwnerId = user.role === 'ADMIN' && createVehicleDto.ownerId
+      ? createVehicleDto.ownerId
+      : user.id;
+
+    if (!targetOwnerId) {
+      throw new ForbiddenException('Propriétaire non identifié.');
+    }
+
+    return this.vehiclesService.create(createVehicleDto, targetOwnerId);
   }
 
   @Get('types')
