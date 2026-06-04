@@ -348,7 +348,7 @@ export class ResidencesService {
     return updated;
   }
 
-  async remove(id: string, ownerId: string): Promise<void> {
+  async remove(id: string, ownerId: string, userRole?: string): Promise<void> {
     const residence = await this.prisma.residence.findUnique({
       where: { id },
       select: { id: true, ownerId: true },
@@ -356,7 +356,7 @@ export class ResidencesService {
 
     if (!residence) throw new NotFoundException('Résidence introuvable.');
 
-    if (residence.ownerId !== ownerId) {
+    if (userRole?.toUpperCase() !== 'ADMIN' && residence.ownerId !== ownerId) {
       throw new ForbiddenException("Vous n'êtes pas propriétaire de cette résidence.");
     }
 

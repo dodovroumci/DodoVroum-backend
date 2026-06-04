@@ -144,7 +144,7 @@ export class ResidencesController {
   @ApiResponse({ status: 404, description: 'Résidence non trouvée' })
   @ApiResponse({ status: 409, description: 'Résidence possède des réservations actives' })
   remove(@Param('id') id: string, @Request() req) {
-    return this.residencesService.remove(id, req.user.id);
+    return this.residencesService.remove(id, req.user.id, req.user.role);
   }
 
   @Post(':id/blocked-dates')
