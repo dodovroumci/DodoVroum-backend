@@ -108,6 +108,11 @@ export class CreateVehicleDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiProperty({ example: 'user-uuid-123', description: 'ID du propriétaire (Admin only)', required: false })
+  @IsOptional()
+  @IsString()
+  ownerId?: string;
 }
 
 export class UpdateVehicleDto extends PartialType(CreateVehicleDto) {}
