@@ -49,8 +49,6 @@ export class VehiclesController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   async create(@Body() createVehicleDto: CreateVehicleDto, @GetUser() user: any) {
-    console.log('[DEBUG] DTO reçu par le backend:', createVehicleDto);
-
     const targetOwnerId = (user.role === 'ADMIN' && createVehicleDto.ownerId)
       ? createVehicleDto.ownerId
       : user.id;
