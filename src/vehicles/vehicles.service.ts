@@ -78,7 +78,8 @@ export class VehiclesService {
   // --- WRITE METHODS ---
 
   async create(dto: CreateVehicleDto, ownerId: string) {
-    const { ownerId: _ownerId, ...dtoWithoutOwner } = dto as any;
+    // Exclure ownerId et proprietaireId pour éviter tout conflit avec la relation Prisma
+    const { ownerId: _o, proprietaireId: _p, ...dtoWithoutOwner } = dto as any;
     const cleanData = this.transformVehicleData(dtoWithoutOwner);
 
     try {
