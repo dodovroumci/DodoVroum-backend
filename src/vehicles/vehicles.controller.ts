@@ -49,10 +49,21 @@ export class VehiclesController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   async create(@Body() createVehicleDto: CreateVehicleDto, @GetUser() user: any) {
+    console.log('🚗 [VehiclesController::create] DTO reçu :', JSON.stringify(createVehicleDto, null, 2));
+    console.log('👤 [VehiclesController::create] Utilisateur connecté :', { id: user.id, role: user.role });
+
     const adminOwnerId = createVehicleDto.ownerId || createVehicleDto.proprietaireId;
     const targetOwnerId = user.role === 'ADMIN' && adminOwnerId
       ? adminOwnerId
       : user.id;
+
+    console.log('🎯 [VehiclesController::create] Résolution ownerId :', {
+      'ownerId (DTO)': createVehicleDto.ownerId,
+      'proprietaireId (DTO)': createVehicleDto.proprietaireId,
+      adminOwnerId,
+      targetOwnerId,
+      'user.role === ADMIN': user.role === 'ADMIN',
+    });
 
     if (!targetOwnerId) {
       throw new ForbiddenException('Propriétaire non identifié.');
