@@ -12,7 +12,6 @@ import {
   HttpStatus,
   HttpCode,
   Patch,
-  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { VehiclesService } from './vehicles.service';
