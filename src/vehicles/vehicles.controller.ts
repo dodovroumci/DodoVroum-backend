@@ -49,14 +49,11 @@ export class VehiclesController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   async create(@Body() createVehicleDto: CreateVehicleDto, @GetUser() user: any) {
-    const adminOwnerId = createVehicleDto.ownerId || createVehicleDto.proprietaireId;
-    const targetOwnerId = user.role === 'ADMIN' && adminOwnerId
-      ? adminOwnerId
-      : user.id;
+    console.log('[DEBUG] DTO reçu par le backend:', createVehicleDto);
 
-    if (!targetOwnerId) {
-      throw new ForbiddenException('Propriétaire non identifié.');
-    }
+    const targetOwnerId = (user.role === 'ADMIN' && createVehicleDto.ownerId)
+      ? createVehicleDto.ownerId
+      : user.id;
 
     return this.vehiclesService.create(createVehicleDto, targetOwnerId);
   }
