@@ -27,6 +27,15 @@ export class PaymentsWebhookController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
   @Public()
+  @Post('geniuspay-test')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Route de test temporaire — À SUPPRIMER' })
+  async handleWebhookTest(@Body() body: any) {
+    this.logger.log('GENIUSPAY_TEST_BODY: ' + JSON.stringify(body));
+    return { status: 'received', body };
+  }
+
+  @Public()
   @UseGuards(GeniusPayWebhookIpGuard, GeniusPaySignatureGuard)
   @Post('geniuspay')
   @HttpCode(HttpStatus.OK)
