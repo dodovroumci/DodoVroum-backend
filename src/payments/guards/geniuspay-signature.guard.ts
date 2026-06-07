@@ -25,8 +25,12 @@ export class GeniusPaySignatureGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest();
-    const signature = request.headers['x-webhook-signature'] as string | undefined;
-    const timestamp = request.headers['x-webhook-timestamp'] as string | undefined;
+    const signature =
+      (request.headers['x-geniuspay-signature'] as string | undefined) ??
+      (request.headers['x-webhook-signature'] as string | undefined);
+    const timestamp =
+      (request.headers['x-geniuspay-timestamp'] as string | undefined) ??
+      (request.headers['x-webhook-timestamp'] as string | undefined);
 
     if (!signature || !timestamp) {
       this.logger.warn('Webhook rejeté : en-têtes de sécurité manquants');
