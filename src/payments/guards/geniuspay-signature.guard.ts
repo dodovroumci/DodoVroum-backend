@@ -59,7 +59,18 @@ export class GeniusPaySignatureGuard implements CanActivate {
       .update(dataToSign)
       .digest('hex');
 
-    if (expected !== signature) {
+    let isValid = false;
+    try {
+      isValid = crypto.timingSafeEqual(
+        Buffer.from(expected, 'hex'),
+        Buffer.from(signature, 'hex'),
+      );
+    } catch {
+      // timingSafeEqual throws if buffers have different lengths
+      isValid = false;
+    }
+
+    if (!isValid) {
       this.logger.error('Signature mismatch!');
       this.logger.debug(`Data: ${dataToSign}`);
       throw new UnauthorizedException('Signature invalide');
