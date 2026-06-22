@@ -43,12 +43,13 @@ export class AuthService {
     return result;
   }
 
-  async login(user: any): Promise<LoginResponse> {
-    const [access_token, refresh_token] = await this._generateTokenPair(user);
+  async login(user: any, rememberMe = false): Promise<LoginResponse> {
+    const refreshTtl = rememberMe ? '30d' : '1d';
+    const [access_token, refresh_token] = await this._generateTokenPair(user, refreshTtl);
     const hash = this._hashToken(refresh_token);
 
     await this.usersService.updateRefreshTokenHash(user.id, hash);
-    this.logger.log(`[LOGIN] user=${user.id} role=${user.role}`);
+    this.logger.log(`[LOGIN] user=${user.id} role=${user.role} rememberMe=${rememberMe}`);
 
     return { access_token, refresh_token, user };
   }
@@ -58,7 +59,7 @@ export class AuthService {
     if (existingUser) throw new BadRequestException('Email déjà utilisé');
 
     const user = await this.usersService.create(registerData);
-    return this.login(user);
+    return this.login(user, false);
   }
 
   async refreshToken(incomingRefreshToken: string): Promise<RefreshResponse> {
@@ -100,8 +101,9 @@ export class AuthService {
       throw new UnauthorizedException('Session invalide');
     }
 
-    // Rotate: issue new pair and overwrite stored hash atomically
-    const [access_token, refresh_token] = await this._generateTokenPair(user);
+    // Rotate: preserve original rememberMe duration from payload
+    const refreshTtl = payload.rememberMe ? '30d' : '1d';
+    const [access_token, refresh_token] = await this._generateTokenPair(user, refreshTtl);
     const newHash = this._hashToken(refresh_token);
     await this.usersService.updateRefreshTokenHash(user.id, newHash);
 
@@ -156,7 +158,9 @@ export class AuthService {
 
   private async _generateTokenPair(
     user: { id: string; email: string; role: string },
+    refreshExpiresIn: string,
   ): Promise<[string, string]> {
+    const rememberMe = refreshExpiresIn === '30d';
     return Promise.all([
       this.jwtService.signAsync(
         { email: user.email, sub: user.id, role: user.role, type: 'access' },
@@ -166,9 +170,9 @@ export class AuthService {
         },
       ),
       this.jwtService.signAsync(
-        { sub: user.id, type: 'refresh' },
+        { sub: user.id, type: 'refresh', rememberMe },
         {
-          expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN', '7d'),
+          expiresIn: refreshExpiresIn,
           secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
         },
       ),
