@@ -298,16 +298,18 @@ export class VehiclesService {
     const vehicle = await this.prisma.vehicle.findUnique({ where: { id } });
     if (!vehicle) throw new NotFoundException('Véhicule introuvable.');
 
+    // Bloque si une réservation est "en cours" : clé remise au client ET séjour non terminé.
     const activeBookingCount = await this.prisma.booking.count({
       where: {
         vehicleId: id,
-        status: { in: ['AWAITING_PAYMENT', 'PENDING', 'PAID', 'CONFIRMED', 'ONGOING'] },
+        keyRetrievedAt: { not: null },
+        endDate: { gt: new Date() },
       },
     });
 
     if (activeBookingCount > 0) {
       throw new ForbiddenException(
-        `Ce véhicule ne peut être supprimé : ${activeBookingCount} réservation(s) active(s) en cours.`,
+        `Ce véhicule ne peut être supprimé : ${activeBookingCount} réservation(s) en cours.`,
       );
     }
 

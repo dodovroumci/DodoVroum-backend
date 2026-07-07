@@ -72,6 +72,7 @@ model Residence {
   isActive      Boolean       @default(true)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
   isVerified    Boolean       @default(false)
   latitude      Float?
   longitude     Float?
@@ -91,6 +92,7 @@ model Residence {
   @@index([isVerified])
   @@index([createdAt])
   @@index([ownerId])
+  @@index([deletedAt])
   @@map("residences")
 }
 
@@ -110,6 +112,7 @@ model Vehicle {
   isActive     Boolean       @default(true)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
   address      String?
   color        String?
   condition    String?
@@ -133,6 +136,7 @@ deletedAt DateTime?
   @@index([isVerified])
   @@index([createdAt])
   @@index([ownerId])
+  @@index([deletedAt])
   @@map("vehicles")
 }
 
@@ -186,6 +190,7 @@ model Booking {
   keyRetrievedAt   DateTime?
   ownerConfirmedAt DateTime?
   checkOutAt       DateTime?
+  deletedAt        DateTime?
   offer            Offer?        @relation(fields: [offerId], references: [id])
   residence        Residence?    @relation(fields: [residenceId], references: [id])
   user             User          @relation(fields: [userId], references: [id])
@@ -203,6 +208,7 @@ deletedAt DateTime?
   @@index([offerId], map: "bookings_offerId_fkey")
   @@index([residenceId], map: "bookings_residenceId_fkey")
   @@index([vehicleId], map: "bookings_vehicleId_fkey")
+  @@index([deletedAt])
   @@map("bookings")
 }
 
