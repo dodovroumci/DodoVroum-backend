@@ -360,18 +360,18 @@ export class ResidencesService {
       throw new ForbiddenException("Vous n'êtes pas propriétaire de cette résidence.");
     }
 
-    // Seules les réservations actives bloquent la suppression.
-    // Le filtre deletedAt: null est injecté automatiquement par l'extension.
+    // Bloque si une réservation est "en cours" : clé remise au client ET séjour non terminé.
     const activeBookingCount = await this.prisma.booking.count({
       where: {
         residenceId: id,
-        status: { in: ['AWAITING_PAYMENT', 'PENDING', 'PAID', 'CONFIRMED', 'ONGOING'] },
+        keyRetrievedAt: { not: null },
+        endDate: { gt: new Date() },
       },
     });
 
     if (activeBookingCount > 0) {
       throw new ForbiddenException(
-        `Cette résidence ne peut être supprimée : ${activeBookingCount} réservation(s) active(s) en cours.`,
+        `Cette résidence ne peut être supprimée : ${activeBookingCount} réservation(s) en cours.`,
       );
     }
 
