@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
-import { PrismaService } from '../common/prisma/prisma.service';
+import { PrismaService, PrismaTxClient } from '../common/prisma/prisma.service';
 import { safeBookingUserSelect, safeResidenceSelect, safeVehicleSelect } from '../common/prisma/safe-selects';
 import { BookingValidationService } from './services/booking-validation.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -225,7 +225,7 @@ export class BookingsService {
    * (Le hard-delete via remove() est couvert par onDelete: Cascade.)
    */
   private async releasePackageBlockedDates(
-    tx: Prisma.TransactionClient,
+    tx: PrismaTxClient,
     bookingId: string,
   ): Promise<void> {
     await tx.blockedDate.deleteMany({ where: { bookingId } });

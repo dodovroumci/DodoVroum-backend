@@ -360,17 +360,22 @@ export class ResidencesService {
       throw new ForbiddenException("Vous n'êtes pas propriétaire de cette résidence.");
     }
 
-    const bookingCount = await this.prisma.booking.count({
-      where: { residenceId: id },
+    // Seules les réservations actives bloquent la suppression.
+    // Le filtre deletedAt: null est injecté automatiquement par l'extension.
+    const activeBookingCount = await this.prisma.booking.count({
+      where: {
+        residenceId: id,
+        status: { in: ['AWAITING_PAYMENT', 'PENDING', 'PAID', 'CONFIRMED', 'ONGOING'] },
+      },
     });
 
-    if (bookingCount > 0) {
+    if (activeBookingCount > 0) {
       throw new ForbiddenException(
-        `Cette résidence ne peut être supprimée car elle est liée à ${bookingCount} réservation(s).`,
+        `Cette résidence ne peut être supprimée : ${activeBookingCount} réservation(s) active(s) en cours.`,
       );
     }
 
-    await this.prisma.residence.delete({ where: { id } });
+    await this.prisma.residence.softDelete(id);
   }
 
   async isOwner(residenceId: string, userId: string): Promise<boolean> {

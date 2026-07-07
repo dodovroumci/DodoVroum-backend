@@ -298,16 +298,19 @@ export class VehiclesService {
     const vehicle = await this.prisma.vehicle.findUnique({ where: { id } });
     if (!vehicle) throw new NotFoundException('Véhicule introuvable.');
 
-    const bookingCount = await this.prisma.booking.count({
-      where: { vehicleId: id },
+    const activeBookingCount = await this.prisma.booking.count({
+      where: {
+        vehicleId: id,
+        status: { in: ['AWAITING_PAYMENT', 'PENDING', 'PAID', 'CONFIRMED', 'ONGOING'] },
+      },
     });
 
-    if (bookingCount > 0) {
+    if (activeBookingCount > 0) {
       throw new ForbiddenException(
-        `Ce véhicule ne peut être supprimé car il est lié à ${bookingCount} réservation(s).`,
+        `Ce véhicule ne peut être supprimé : ${activeBookingCount} réservation(s) active(s) en cours.`,
       );
     }
 
-    await this.prisma.vehicle.delete({ where: { id } });
+    await this.prisma.vehicle.softDelete(id);
   }
 }

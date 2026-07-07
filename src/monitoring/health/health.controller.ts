@@ -19,7 +19,7 @@ export class HealthController {
   @ApiResponse({ status: 503, description: 'Application en panne' })
   check() {
     return this.health.check([
-      () => this.prismaHealth.pingCheck('database', this.prisma),
+      () => this.prismaHealth.pingCheck('database', this.prisma.$raw),
     ]);
   }
 

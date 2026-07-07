@@ -1,7 +1,19 @@
 import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
 import { BookingStatus, Prisma } from '@prisma/client';
 import { differenceInCalendarDays } from 'date-fns';
-import { PrismaService } from '../../common/prisma/prisma.service';
+import { PrismaService, PrismaTxClient } from '../../common/prisma/prisma.service';
+import { Prisma as PrismaTypes } from '@prisma/client';
+
+// Prisma Client Extensions change les InternalArgs de TOUS les modèles, même non étendus.
+// Les signatures findUnique/findFirst du client étendu ne sont pas assignables aux types
+// DefaultArgs du client brut → incompatibilité de variance insoluble via Pick<>.
+// On isole le problème ici avec any, la sécurité est garantie aux frontières publiques.
+interface BookingCheckDb {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  offer: { findUnique: (args: any) => Promise<any> };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  booking: { findFirst: (args: any) => Promise<any> };
+}
 import { CreateBookingDto } from '../dto/create-booking.dto';
 import {
   buildDateOverlapCondition,
@@ -157,12 +169,12 @@ export class BookingValidationService {
   /**
    * Même vérification à l’intérieur d’une transaction Prisma (si besoin ailleurs).
    */
-  async assertNoBlockingOverlapTx(tx: Prisma.TransactionClient, dto: CreateBookingDto): Promise<void> {
+  async assertNoBlockingOverlapTx(tx: PrismaTxClient, dto: CreateBookingDto): Promise<void> {
     await this.runAssertNoBlockingOverlap(tx, dto);
   }
 
   private async runAssertNoBlockingOverlap(
-    db: Pick<PrismaService, 'booking' | 'offer'>,
+    db: BookingCheckDb,
     dto: CreateBookingDto,
   ): Promise<void> {
     const { startDate, endDate, residenceId, vehicleId, offerId } = dto;
