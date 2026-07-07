@@ -21,6 +21,7 @@ import {
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../admin/guards/admin.guard';
 import { IdentityVerificationService } from '../identity-verification/identity-verification.service';
@@ -105,6 +106,18 @@ export class UsersController {
       throw new ForbiddenException("Vous n'êtes pas autorisé à supprimer ce compte.");
     }
     return this.usersService.remove(id);
+  }
+
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @ApiBearerAuth()
+  @Patch(':id/role')
+  @ApiOperation({ summary: "Changer le rôle d'un utilisateur (admin uniquement)" })
+  @ApiResponse({ status: 200, description: 'Role mis a jour avec succes' })
+  async updateRole(
+    @Param('id') id: string,
+    @Body() dto: UpdateUserRoleDto,
+  ) {
+    return this.usersService.updateRole(id, dto.role);
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)

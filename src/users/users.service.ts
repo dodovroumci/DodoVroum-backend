@@ -155,6 +155,18 @@ export class UsersService {
     }
   }
 
+  async updateRole(id: string, role: UserRole) {
+    const user = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
+    if (!user) throw new NotFoundException('Utilisateur non trouvé.');
+
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: { role },
+      select: this.getUserSelectFull(),
+    });
+    return this.normalizeUser(updated);
+  }
+
   async remove(id: string) {
     return this.prisma.user.delete({ where: { id } });
   }
