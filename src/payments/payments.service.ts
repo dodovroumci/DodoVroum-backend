@@ -22,7 +22,7 @@ export class PaymentsService {
 
   private readonly httpsAgent = new https.Agent({
     rejectUnauthorized: true,
-    servername: 'pay.genius.ci',
+    keepAlive: false,
   });
 
   constructor(
