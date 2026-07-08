@@ -41,6 +41,34 @@ export class AuthController {
     return this.authService.login(req.user, loginDto.rememberMe ?? false);
   }
 
+  @UseGuards(LocalAuthGuard, AuthThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 300000 } })
+  @Post('login/client')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Connexion utilisateur (application Client)' })
+  @ApiBody({ type: LoginDto })
+  @ApiResponse({ status: 200, description: 'Connexion réussie' })
+  @ApiResponse({ status: 401, description: 'Identifiants invalides' })
+  @ApiResponse({ status: 403, description: "Rôle incompatible avec l'application Client" })
+  async loginClient(@Request() req, @Body() loginDto: LoginDto): Promise<LoginResponse> {
+    await this.authService.validateAppAccess(req.user, 'CLIENT');
+    return this.authService.login(req.user, loginDto.rememberMe ?? false);
+  }
+
+  @UseGuards(LocalAuthGuard, AuthThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 300000 } })
+  @Post('login/proprio')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Connexion utilisateur (application Propriétaire)' })
+  @ApiBody({ type: LoginDto })
+  @ApiResponse({ status: 200, description: 'Connexion réussie' })
+  @ApiResponse({ status: 401, description: 'Identifiants invalides' })
+  @ApiResponse({ status: 403, description: "Rôle incompatible avec l'application Propriétaire" })
+  async loginProprio(@Request() req, @Body() loginDto: LoginDto): Promise<LoginResponse> {
+    await this.authService.validateAppAccess(req.user, 'PROPRIETAIRE');
+    return this.authService.login(req.user, loginDto.rememberMe ?? false);
+  }
+
   @UseGuards(AuthThrottlerGuard)
   @Throttle({ default: { limit: 3, ttl: 300000 } })
   @Post('register')

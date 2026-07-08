@@ -1,6 +1,7 @@
 import {
   Injectable,
   UnauthorizedException,
+  ForbiddenException,
   BadRequestException,
   Logger,
 } from '@nestjs/common';
@@ -52,6 +53,30 @@ export class AuthService {
     this.logger.log(`[LOGIN] user=${user.id} role=${user.role} rememberMe=${rememberMe}`);
 
     return { access_token, refresh_token, user };
+  }
+
+  /**
+   * Valide si l'utilisateur possède le rôle requis pour l'application cible.
+   * À appeler dans le Controller après l'authentification (req.user), une
+   * fois le mot de passe déjà vérifié par LocalStrategy/LocalAuthGuard.
+   * ADMIN est toujours autorisé, quelle que soit l'app ciblée.
+   */
+  async validateAppAccess(user: any, requiredRole: 'CLIENT' | 'PROPRIETAIRE'): Promise<void> {
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+
+    if (user.role === 'ADMIN') {
+      return;
+    }
+
+    if (user.role !== requiredRole) {
+      const message =
+        requiredRole === 'CLIENT'
+          ? "Accès non autorisé à l'application Client."
+          : "Accès non autorisé à l'application Propriétaire.";
+      throw new ForbiddenException(message);
+    }
   }
 
   async register(registerData: any): Promise<LoginResponse> {
