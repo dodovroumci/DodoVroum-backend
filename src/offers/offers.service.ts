@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { safeOwnerSelect } from '../common/prisma/safe-selects';
 import { PaginationService, PaginationOptions, PaginationResult } from '../common/services/pagination.service';
@@ -710,15 +710,66 @@ export class OffersService {
   async remove(id: string) {
     await this.findOne(id);
 
-    return this.prisma.offer.update({
+    // Bloque si une réservation est "en cours" : clé remise au client ET séjour non terminé.
+    const activeBookingCount = await this.prisma.booking.count({
+      where: {
+        offerId: id,
+        keyRetrievedAt: { not: null },
+        endDate: { gt: new Date() },
+      },
+    });
+
+    if (activeBookingCount > 0) {
+      throw new ForbiddenException(
+        `Cette offre combinée ne peut être supprimée : ${activeBookingCount} réservation(s) en cours.`,
+      );
+    }
+
+    const updated = await this.prisma.offer.update({
       where: { id },
       data: { isActive: false },
       include: {
         owner: {
           select: safeOwnerSelect,
         },
+        residence: {
+          include: {
+            reviews: {
+              select: {
+                rating: true,
+              },
+            },
+            _count: {
+              select: {
+                reviews: true,
+              },
+            },
+          },
+        },
+        vehicle: {
+          include: {
+            reviews: {
+              select: {
+                rating: true,
+              },
+            },
+            _count: {
+              select: {
+                reviews: true,
+                bookings: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            bookings: true,
+          },
+        },
       },
     });
+
+    return this.formatOfferResponse(updated);
   }
 
   /**
