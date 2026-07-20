@@ -1,6 +1,7 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
+import { BookingsService } from '../bookings/bookings.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from './guards/admin.guard';
 import { AdminStatsDto } from './dto/admin-stats.dto';
@@ -10,7 +11,10 @@ import { AdminStatsDto } from './dto/admin-stats.dto';
 @UseGuards(JwtAuthGuard, AdminGuard)
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly bookingsService: BookingsService,
+  ) {}
 
   @Get('stats')
   @ApiOperation({ 
@@ -53,6 +57,17 @@ export class AdminController {
   async getRecentBookings(@Query('limit') limit?: string) {
     const limitNumber = limit ? parseInt(limit, 10) : 10;
     return this.adminService.getRecentBookings(limitNumber);
+  }
+
+  @Get('users/:id/bookings')
+  @ApiOperation({
+    summary: "Obtenir les réservations d'un client (fiche admin utilisateur)",
+    description: 'Réutilise la même logique que /bookings/my-bookings, scopée par ID pour la vue admin.',
+  })
+  @ApiResponse({ status: 200, description: 'Liste des réservations du client' })
+  @ApiResponse({ status: 403, description: 'Accès refusé - Réservé aux administrateurs' })
+  async getUserBookings(@Param('id') id: string) {
+    return this.bookingsService.findByUser(id);
   }
 }
 

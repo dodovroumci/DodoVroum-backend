@@ -635,6 +635,9 @@ private formatBookingResponse(booking: any) {
     const totalPaid = payments
       .filter((p: any) => p.status === 'COMPLETED')
       .reduce((sum: number, p: any) => sum + p.amount, 0);
+    const remainingBalance = Math.max(booking.totalPrice - totalPaid, 0);
+    const paymentStatus =
+      totalPaid <= 0 ? 'UNPAID' : remainingBalance > 0 ? 'PARTIAL' : 'PAID';
 
     // Après paiement réussi (PAID), la réservation est en attente d'action propriétaire.
     const normalizedStatus =
@@ -688,6 +691,8 @@ private formatBookingResponse(booking: any) {
       residenceImage: booking.offer?.imageUrl || this.getFirstImage(booking.residence?.images) || this.getFirstImage(booking.vehicle?.images),
       totalPrice: booking.totalPrice,
       totalPaid,
+      remainingBalance,
+      paymentStatus,
       status: statusMap[booking.status] || booking.status.toLowerCase(),
       
       // --- CHAMPS DE SUIVI POUR LE STEPPER ---
