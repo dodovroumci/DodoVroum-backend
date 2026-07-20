@@ -1,4 +1,11 @@
-import { Injectable, NotFoundException, Logger, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  Logger,
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -77,6 +84,9 @@ export class UsersService {
       return this.normalizeUser(user);
     } catch (error) {
       if (error instanceof ConflictException) throw error;
+      // Un compte soft-deleted garde son email en base (contrainte unique réelle) :
+      // le pré-check ci-dessus ne le voit pas, donc la violation ne peut être détectée qu'ici.
+      if (error.code === 'P2002') throw new ConflictException('Cet email est déjà utilisé.');
       this.logger.error(`[CREATE_USER_ERROR] ${error.message}`);
       throw new BadRequestException("Erreur lors de la création de l'utilisateur");
     }
@@ -168,7 +178,31 @@ export class UsersService {
   }
 
   async remove(id: string) {
-    return this.prisma.user.delete({ where: { id } });
+    const user = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
+    if (!user) throw new NotFoundException('Utilisateur non trouvé.');
+
+    // Bloque si une réservation est "en cours" : clé remise au client ET séjour non terminé.
+    // Couvre à la fois le cas client (locataire) et le cas propriétaire (résidence/véhicule/offre loués).
+    const activeBookingCount = await this.prisma.booking.count({
+      where: {
+        keyRetrievedAt: { not: null },
+        endDate: { gt: new Date() },
+        OR: [
+          { userId: id },
+          { residence: { ownerId: id } },
+          { vehicle: { ownerId: id } },
+          { offer: { ownerId: id } },
+        ],
+      },
+    });
+
+    if (activeBookingCount > 0) {
+      throw new ForbiddenException(
+        `Ce compte ne peut être supprimé : ${activeBookingCount} réservation(s) en cours.`,
+      );
+    }
+
+    await this.prisma.user.softDelete(id);
   }
 
   // Fields that must never appear in any API response, regardless of what Prisma returns.

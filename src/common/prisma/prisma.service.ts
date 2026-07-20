@@ -57,11 +57,11 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     return this._ext.booking;
   }
 
-  // ── Modèles standard (pas de soft-delete) ───────────────────────────────
-
-  get user(): PrismaClient['user'] {
-    return this.$raw.user;
+  get user(): ExtendedPrismaClient['user'] {
+    return this._ext.user;
   }
+
+  // ── Modèles standard (pas de soft-delete) ───────────────────────────────
 
   get offer(): PrismaClient['offer'] {
     return this.$raw.offer;
