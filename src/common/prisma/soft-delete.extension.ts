@@ -62,6 +62,25 @@ export const softDeleteExtension = Prisma.defineExtension({
         return (ctx as any).findFirst({ ...args, where: { ...args.where, deletedAt: null } });
       },
     },
+
+    user: {
+      /**
+       * Suppression logique. Utiliser à la place de prisma.user.delete().
+       */
+      async softDelete(id: string) {
+        const ctx = Prisma.getExtensionContext(this);
+        return (ctx as any).update({ where: { id }, data: { deletedAt: new Date() } });
+      },
+
+      /**
+       * findUnique redirigé vers findFirst pour filtrer les comptes soft-deleted
+       * (empêche notamment la connexion sur un compte supprimé via findByEmail).
+       */
+      async findUnique<T extends Prisma.UserFindUniqueArgs>(args: T) {
+        const ctx = Prisma.getExtensionContext(this);
+        return (ctx as any).findFirst({ ...args, where: { ...args.where, deletedAt: null } });
+      },
+    },
   },
 
   // ── 2. Filtrage automatique sur toutes les lectures ─────────────────────
@@ -78,6 +97,11 @@ export const softDeleteExtension = Prisma.defineExtension({
       count:     ({ args, query }) => query(withDeletedAt(args)),
     },
     booking: {
+      findMany:  ({ args, query }) => query(withDeletedAt(args)),
+      findFirst: ({ args, query }) => query(withDeletedAt(args)),
+      count:     ({ args, query }) => query(withDeletedAt(args)),
+    },
+    user: {
       findMany:  ({ args, query }) => query(withDeletedAt(args)),
       findFirst: ({ args, query }) => query(withDeletedAt(args)),
       count:     ({ args, query }) => query(withDeletedAt(args)),

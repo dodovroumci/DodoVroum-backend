@@ -20,6 +20,7 @@ model User {
   isActive           Boolean   @default(true)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
   avatar             String?
   isVerified         Boolean   @default(false)
   localisation       String?
@@ -53,6 +54,7 @@ model User {
   @@index([isActive])
   @@index([role])
   @@index([isVerified])
+  @@index([deletedAt])
   @@map("users")
 }
 
