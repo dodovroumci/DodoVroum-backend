@@ -29,6 +29,11 @@ export class IdentityVerificationService {
       identityPhotoExtra: submitDto.identityPhotoExtra,
       verificationStatus: VerificationStatus.PENDING,
       submittedAt: new Date(),
+      // Une resoumission efface le rejet précédent — sinon l'admin voit encore
+      // l'ancien motif alors que le dossier est de nouveau en attente.
+      rejectionReason: null,
+      verifiedAt: null,
+      verifiedBy: null,
     };
 
     return this.prisma.identityVerification.upsert({
@@ -84,6 +89,7 @@ export class IdentityVerificationService {
 
     if (updateDto.verificationStatus === VerificationStatus.VERIFIED) {
       updateData.verifiedAt = new Date();
+      updateData.rejectionReason = null;
       await this.prisma.user.update({ where: { id: userId }, data: { isVerified: true } });
     } else if (updateDto.verificationStatus === VerificationStatus.REJECTED) {
       if (!updateDto.rejectionReason) throw new BadRequestException('Raison requise');
