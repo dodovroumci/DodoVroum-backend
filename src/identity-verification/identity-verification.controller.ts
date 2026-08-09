@@ -40,10 +40,16 @@ export class IdentityVerificationController {
 
   @Get('admin/all')
   @UseGuards(AdminGuard)
-  @ApiOperation({ summary: 'Admin : Voir toutes les vérifications' })
+  @ApiOperation({ summary: 'Admin : Voir toutes les vérifications (filtrable par statut)' })
   async getAll(@Query('status') status?: VerificationStatus) {
-    // Utilise la méthode getPendingVerifications ou crée une méthode générique
-    return this.identityVerificationService.getPendingVerifications();
+    return this.identityVerificationService.getPendingVerifications(status);
+  }
+
+  @Get('admin/user/:userId')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: "Admin : Voir les documents d'identité d'un utilisateur précis" })
+  async getForUser(@Param('userId') userId: string) {
+    return this.identityVerificationService.getVerificationStatus(userId);
   }
 
   @Patch('admin/verify/:userId')
