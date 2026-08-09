@@ -98,9 +98,9 @@ export class IdentityVerificationService {
     });
   }
 
-  async getPendingVerifications() {
+  async getPendingVerifications(status?: VerificationStatus) {
     return this.prisma.identityVerification.findMany({
-      where: { verificationStatus: VerificationStatus.PENDING },
+      where: { verificationStatus: status ?? VerificationStatus.PENDING },
       include: { user: { select: safeAdminUserSelect } },
       orderBy: { submittedAt: 'asc' },
     });
