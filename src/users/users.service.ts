@@ -122,11 +122,14 @@ export class UsersService {
         localisation: true,
         typeProprietaire: true,
         residences: {
-          where: { isActive: true },
+          // deletedAt: null est requis explicitement — les relations imbriquées
+          // (via select/include) ne passent pas par l'extension soft-delete qui
+          // ne filtre que les requêtes racine (findMany/findFirst/count).
+          where: { isActive: true, deletedAt: null },
           select: this.getResidenceSelect(),
         },
         vehicles: {
-          where: { isActive: true },
+          where: { isActive: true, deletedAt: null },
           select: this.getVehicleSelect(),
         },
       },
