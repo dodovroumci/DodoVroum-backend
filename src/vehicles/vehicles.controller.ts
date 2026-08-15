@@ -17,6 +17,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { VehiclesService } from './vehicles.service';
 import { VehiclesQueryDto } from './dto/vehicles-query.dto';
 import { CreateVehicleDto, UpdateVehicleDto } from './dto/create-vehicle.dto';
+import { BlockDateDto } from './dto/block-date.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { VehicleOwnerGuard } from './guards/vehicle-owner.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
@@ -87,5 +88,28 @@ export class VehiclesController {
   @ApiBearerAuth()
   async remove(@Param('id') id: string) {
     return this.vehiclesService.remove(id);
+  }
+
+  @Post(':id/blocked-dates')
+  @UseGuards(JwtAuthGuard, VehicleOwnerGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Bloquer des dates pour un véhicule' })
+  async blockDates(@Param('id') id: string, @Body() blockDateDto: BlockDateDto) {
+    return this.vehiclesService.blockDates(id, blockDateDto);
+  }
+
+  @Get(':id/blocked-dates')
+  @Public()
+  @ApiOperation({ summary: "Récupérer toutes les dates bloquées d'un véhicule" })
+  async getBlockedDates(@Param('id') id: string) {
+    return this.vehiclesService.getBlockedDates(id);
+  }
+
+  @Delete(':id/blocked-dates/:blockedDateId')
+  @UseGuards(JwtAuthGuard, VehicleOwnerGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Supprimer une période de dates bloquées' })
+  async unblockDates(@Param('id') id: string, @Param('blockedDateId') blockedDateId: string) {
+    return this.vehiclesService.unblockDates(id, blockedDateId);
   }
 }

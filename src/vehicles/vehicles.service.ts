@@ -294,6 +294,40 @@ export class VehiclesService {
     return ranges;
   }
 
+  // --- BLOCKED DATES ---
+
+  async blockDates(vehicleId: string, dto: { startDate: string; endDate: string; reason?: string }) {
+    const vehicle = await this.prisma.vehicle.findUnique({ where: { id: vehicleId } });
+    if (!vehicle) throw new NotFoundException('Véhicule introuvable.');
+
+    const startDate = new Date(dto.startDate);
+    const endDate = new Date(dto.endDate);
+
+    const bookingConflict = await this.prisma.booking.findFirst({
+      where: {
+        vehicleId,
+        status: { in: [BookingStatus.AWAITING_PAYMENT, BookingStatus.PENDING, BookingStatus.PAID, BookingStatus.CONFIRMED, BookingStatus.ONGOING] },
+        AND: [{ startDate: { lt: endDate } }, { endDate: { gt: startDate } }],
+      },
+    });
+
+    if (bookingConflict) {
+      throw new BadRequestException('Impossible de bloquer ces dates : une réservation existe déjà sur cette période.');
+    }
+
+    return this.prisma.blockedDate.create({
+      data: { vehicleId, startDate, endDate, reason: dto.reason },
+    });
+  }
+
+  async getBlockedDates(vehicleId: string) {
+    return this.prisma.blockedDate.findMany({ where: { vehicleId }, orderBy: { startDate: 'asc' } });
+  }
+
+  async unblockDates(vehicleId: string, blockedDateId: string) {
+    return this.prisma.blockedDate.deleteMany({ where: { id: blockedDateId, vehicleId } });
+  }
+
   async remove(id: string): Promise<void> {
     const vehicle = await this.prisma.vehicle.findUnique({ where: { id } });
     if (!vehicle) throw new NotFoundException('Véhicule introuvable.');
