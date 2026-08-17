@@ -92,7 +92,6 @@ model Residence {
   reviews       Review[]
   blockedDates  BlockedDate[]
   reports       ListingReport[]
-
   @@index([city])
   @@index([pricePerDay])
   @@index([isActive])
@@ -136,7 +135,11 @@ model Vehicle {
   reviews      Review[]
   owner        User?         @relation(fields: [ownerId], references: [id])
   blockedDates BlockedDate[]
+
+
+
   reports      ListingReport[]
+
 
   @@index([brand])
   @@index([type])
