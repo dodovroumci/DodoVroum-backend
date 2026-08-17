@@ -14,11 +14,12 @@ import { IdentityType } from '@prisma/client';
 export class SubmitIdentityVerificationDto {
   @ApiProperty({
     example: '1234567890',
-    description: "Numéro de la pièce d'identité (CNI, Passeport, etc.)"
+    description: "Numéro de la pièce d'identité (CNI, Passeport, etc.)",
+    required: false
   })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: "Le numéro de pièce d'identité est requis" })
-  identityNumber: string;
+  identityNumber?: string;
 
   @ApiProperty({
     enum: IdentityType,
