@@ -91,9 +91,6 @@ model Residence {
   owner         User?         @relation(fields: [ownerId], references: [id])
   reviews       Review[]
   blockedDates  BlockedDate[]
-
-  deletedAt DateTime? 
-  @@index([deletedAt])
   reports       ListingReport[]
   @@index([city])
   @@index([pricePerDay])
@@ -139,8 +136,7 @@ model Vehicle {
   owner        User?         @relation(fields: [ownerId], references: [id])
   blockedDates BlockedDate[]
 
-deletedAt DateTime? 
-  @@index([deletedAt])
+
 
   reports      ListingReport[]
 
@@ -215,8 +211,7 @@ model Booking {
   blockedDates     BlockedDate[]
   payments         Payment[]
   reviews          Review[]
-deletedAt DateTime? 
-  @@index([deletedAt])
+
   @@index([userId])
   @@index([startDate])
   @@index([endDate])
