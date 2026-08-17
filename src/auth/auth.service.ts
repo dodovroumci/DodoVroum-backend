@@ -11,6 +11,8 @@ import { UsersService } from '../users/users.service';
 import { User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import { MailService } from '../mail/mail.service';
+import { RegisterProprietaireDto } from './dto/register-proprietaire.dto';
 
 export interface LoginResponse {
   access_token: string;
@@ -31,6 +33,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly mailService: MailService,
   ) {}
 
   async validateUser(email: string, pass: string): Promise<any> {
@@ -84,6 +87,32 @@ export class AuthService {
     if (existingUser) throw new BadRequestException('Email déjà utilisé');
 
     const user = await this.usersService.create(registerData);
+    return this.login(user, false);
+  }
+
+  /**
+   * Auto-inscription publique propriétaire. Rôle et traçabilité contrat sont
+   * fixés côté UsersService.createOwnerSelfRegistration — ce DTO n'a d'ailleurs
+   * aucun champ `role` (rejeté par le ValidationPipe si présent dans le body).
+   * Auto-login immédiat après création (pas de vérification email bloquante).
+   */
+  async registerProprietaire(dto: RegisterProprietaireDto): Promise<LoginResponse> {
+    const user = await this.usersService.createOwnerSelfRegistration({
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      email: dto.email,
+      phone: dto.phone,
+      password: dto.password,
+    });
+
+    // Non-bloquant : l'inscription ne doit jamais échouer à cause de l'email.
+    this.mailService
+      .sendOwnerWelcomeEmail({ to: user.email, firstName: user.firstName })
+      .catch((error) =>
+        this.logger.warn(`[OWNER_WELCOME_EMAIL_FAILED] user=${user.id} — ${error.message}`),
+      );
+
+    this.logger.log(`[REGISTER_PROPRIETAIRE] user=${user.id}`);
     return this.login(user, false);
   }
 

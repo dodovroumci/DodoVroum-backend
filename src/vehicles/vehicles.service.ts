@@ -10,7 +10,8 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { safeOwnerSelect } from '../common/prisma/safe-selects';
 import { VehiclesQueryDto } from './dto/vehicles-query.dto';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
-import { VehicleType, Prisma, BookingStatus } from '@prisma/client';
+import { VehicleType, Prisma, BookingStatus, ListingModerationStatus } from '@prisma/client';
+import { ReportListingDto } from '../common/dto/report-listing.dto';
 
 @Injectable()
 export class VehiclesService {
@@ -26,6 +27,31 @@ export class VehiclesService {
       select: { ownerId: true }
     });
     return vehicle?.ownerId === userId;
+  }
+
+  async setModerationStatus(vehicleId: string, status: ListingModerationStatus) {
+    const vehicle = await this.prisma.vehicle.findUnique({ where: { id: vehicleId }, select: { id: true } });
+    if (!vehicle) throw new NotFoundException('Véhicule introuvable.');
+
+    await this.prisma.vehicle.update({ where: { id: vehicleId }, data: { moderationStatus: status } });
+    this.logger.log(`[VEHICLE_MODERATION] vehicle=${vehicleId} status=${status}`);
+    return { id: vehicleId, moderationStatus: status };
+  }
+
+  async reportListing(vehicleId: string, dto: ReportListingDto) {
+    const vehicle = await this.prisma.vehicle.findUnique({ where: { id: vehicleId }, select: { id: true } });
+    if (!vehicle) throw new NotFoundException('Véhicule introuvable.');
+
+    const report = await this.prisma.listingReport.create({
+      data: {
+        vehicleId,
+        reporterEmail: dto.reporterEmail,
+        reporterPhone: dto.reporterPhone,
+        reason: dto.reason,
+      },
+    });
+    this.logger.log(`[VEHICLE_REPORTED] vehicle=${vehicleId} report=${report.id}`);
+    return { id: report.id };
   }
 
   async findAllTypes() {
@@ -190,12 +216,14 @@ export class VehiclesService {
     const where: any = {};
 
     // 1. Logique Dashboard : si un ID est fourni, on restreint a son proprietaire
+    // (le propriétaire/l'admin doit voir ses annonces même masquées/suspendues)
     if (ownerId) {
       where.ownerId = ownerId;
     }
-    // 2. Logique Mobile : si pas d'ID, on expose les vehicules actifs (ou inactifs si isActive=false)
+    // 2. Logique Mobile/public : si pas d'ID, on expose les vehicules actifs ET non modérés
     else {
       where.isActive = isActive !== undefined ? isActive : true;
+      where.moderationStatus = 'ACTIVE';
     }
 
     // 3. Filtres optionnels

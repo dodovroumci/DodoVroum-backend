@@ -13,6 +13,7 @@ import {
   HttpCode,
   Patch,
 } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { VehiclesService } from './vehicles.service';
 import { VehiclesQueryDto } from './dto/vehicles-query.dto';
@@ -22,6 +23,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { VehicleOwnerGuard } from './guards/vehicle-owner.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { PartnerGuard } from '../common/guards/partner.guard';
+import { AdminGuard } from '../admin/guards/admin.guard';
+import { ModerateListingDto } from '../common/dto/moderate-listing.dto';
+import { ReportListingDto } from '../common/dto/report-listing.dto';
 
 @ApiTags('Vehicles')
 @Controller('vehicles')
@@ -46,7 +51,7 @@ export class VehiclesController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PartnerGuard)
   @ApiBearerAuth()
   async create(@Body() createVehicleDto: CreateVehicleDto, @GetUser() user: any) {
     const targetOwnerId = (user.role === 'ADMIN' && createVehicleDto.ownerId)
@@ -54,6 +59,24 @@ export class VehiclesController {
       : user.id;
 
     return this.vehiclesService.create(createVehicleDto, targetOwnerId);
+  }
+
+  @Patch(':id/moderation')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Modérer une annonce véhicule (masquer/suspendre/réactiver) — admin uniquement" })
+  async moderate(@Param('id') id: string, @Body() dto: ModerateListingDto) {
+    return this.vehiclesService.setModerationStatus(id, dto.status);
+  }
+
+  @Post(':id/report')
+  @Public()
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 600000 } })
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Signaler une annonce véhicule (public)' })
+  async report(@Param('id') id: string, @Body() dto: ReportListingDto) {
+    return this.vehiclesService.reportListing(id, dto);
   }
 
   @Get('types')

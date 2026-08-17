@@ -22,6 +22,7 @@ import { AuthThrottlerGuard } from './guards/auth-throttler.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { RegisterProprietaireDto } from './dto/register-proprietaire.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 
 @ApiTags('auth')
@@ -78,6 +79,19 @@ export class AuthController {
   @ApiResponse({ status: 201, description: 'Inscription réussie' })
   async register(@Body() registerDto: RegisterDto): Promise<LoginResponse> {
     return this.authService.register(registerDto);
+  }
+
+  @UseGuards(AuthThrottlerGuard)
+  @Throttle({ default: { limit: 3, ttl: 300000 } })
+  @Post('register/proprietaire')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Auto-inscription propriétaire (public, rôle PROPRIETAIRE forcé côté serveur)' })
+  @ApiBody({ type: RegisterProprietaireDto })
+  @ApiResponse({ status: 201, description: 'Inscription réussie, connexion automatique' })
+  @ApiResponse({ status: 400, description: 'Données invalides ou contrat non accepté' })
+  @ApiResponse({ status: 409, description: 'Email déjà utilisé' })
+  async registerProprietaire(@Body() dto: RegisterProprietaireDto): Promise<LoginResponse> {
+    return this.authService.registerProprietaire(dto);
   }
 
   @UseGuards(AuthThrottlerGuard)

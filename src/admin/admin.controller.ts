@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Patch, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { BookingsService } from '../bookings/bookings.service';
@@ -68,6 +68,19 @@ export class AdminController {
   @ApiResponse({ status: 403, description: 'Accès refusé - Réservé aux administrateurs' })
   async getUserBookings(@Param('id') id: string) {
     return this.bookingsService.findByUser(id);
+  }
+
+  @Get('listing-reports')
+  @ApiOperation({ summary: "Lister les signalements d'annonces (véhicules/résidences)" })
+  @ApiQuery({ name: 'status', required: false, enum: ['OPEN', 'RESOLVED'] })
+  async getListingReports(@Query('status') status?: 'OPEN' | 'RESOLVED') {
+    return this.adminService.getListingReports(status);
+  }
+
+  @Patch('listing-reports/:id/resolve')
+  @ApiOperation({ summary: "Marquer un signalement d'annonce comme résolu" })
+  async resolveListingReport(@Param('id') id: string, @Request() req) {
+    return this.adminService.resolveListingReport(id, req.user.id);
   }
 }
 

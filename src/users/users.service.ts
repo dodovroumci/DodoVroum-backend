@@ -11,6 +11,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { Prisma, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt'; // Ajout de l'import
+import { CURRENT_PARTNER_CONTRACT_VERSION } from '../auth/constants/contract';
 
 export interface UserFilters {
   role?: string;
@@ -90,6 +91,27 @@ export class UsersService {
       this.logger.error(`[CREATE_USER_ERROR] ${error.message}`);
       throw new BadRequestException("Erreur lors de la création de l'utilisateur");
     }
+  }
+
+  /**
+   * Auto-inscription propriétaire (route publique). Le rôle PROPRIETAIRE et la
+   * traçabilité d'acceptation du contrat sont fixés ICI, jamais depuis un input
+   * appelant — c'est le seul point d'entrée de ce flux, même si l'appelant se
+   * trompe, le rôle ne peut pas être autre chose que PROPRIETAIRE.
+   */
+  async createOwnerSelfRegistration(data: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    password: string;
+  }) {
+    return this.create({
+      ...data,
+      role: UserRole.PROPRIETAIRE,
+      contractAcceptedAt: new Date(),
+      contractVersion: CURRENT_PARTNER_CONTRACT_VERSION,
+    } as CreateUserDto);
   }
 
   async findAll(filters?: UserFilters) {
