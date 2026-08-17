@@ -7,6 +7,24 @@ import { Prisma } from '@prisma/client';
 export class AdminService {
   constructor(private prisma: PrismaService) {}
 
+  async getListingReports(status?: 'OPEN' | 'RESOLVED') {
+    return this.prisma.listingReport.findMany({
+      where: status ? { status } : undefined,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        vehicle: { select: { id: true, brand: true, model: true } },
+        residence: { select: { id: true, title: true } },
+      },
+    });
+  }
+
+  async resolveListingReport(id: string, adminId: string) {
+    return this.prisma.listingReport.update({
+      where: { id },
+      data: { status: 'RESOLVED', resolvedAt: new Date(), resolvedBy: adminId },
+    });
+  }
+
   /**
    * Obtenir les statistiques globales de la plateforme
    */

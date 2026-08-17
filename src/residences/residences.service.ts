@@ -7,7 +7,8 @@ import { AppLoggerService } from '../logging/app-logger.service';
 import { CreateResidenceDto } from './dto/create-residence.dto';
 import { UpdateResidenceDto } from './dto/update-residence.dto';
 import { BlockDateDto } from './dto/block-date.dto';
-import { BookingStatus } from '@prisma/client';
+import { BookingStatus, ListingModerationStatus } from '@prisma/client';
+import { ReportListingDto } from '../common/dto/report-listing.dto';
 
 interface ResidencesQueryOptions extends PaginationOptions {
   type?: string;
@@ -97,7 +98,14 @@ export class ResidencesService {
     const skip = this.paginationService.calculateSkip(page, limit);
     const where: any = { isActive: isActive !== undefined ? isActive : true };
 
-    if (proprietaireId) where.ownerId = proprietaireId;
+    // Le propriétaire/l'admin qui filtre sur son propre ID doit voir ses
+    // annonces même masquées/suspendues ; le listing public non filtré ne
+    // montre que ce que l'admin n'a pas modéré.
+    if (proprietaireId) {
+      where.ownerId = proprietaireId;
+    } else {
+      where.moderationStatus = 'ACTIVE';
+    }
     if (type) {
       console.log('Filtre appliqué pour type:', type.trim());
       where.typeResidence = { contains: type.trim() };
@@ -381,6 +389,31 @@ export class ResidencesService {
   async isOwner(residenceId: string, userId: string): Promise<boolean> {
     const res = await this.prisma.residence.findUnique({ where: { id: residenceId }, select: { ownerId: true } });
     return res?.ownerId === userId;
+  }
+
+  async setModerationStatus(residenceId: string, status: ListingModerationStatus) {
+    const residence = await this.prisma.residence.findUnique({ where: { id: residenceId }, select: { id: true } });
+    if (!residence) throw new NotFoundException('Résidence introuvable.');
+
+    await this.prisma.residence.update({ where: { id: residenceId }, data: { moderationStatus: status } });
+    this.logger.log(`[RESIDENCE_MODERATION] residence=${residenceId} status=${status}`);
+    return { id: residenceId, moderationStatus: status };
+  }
+
+  async reportListing(residenceId: string, dto: ReportListingDto) {
+    const residence = await this.prisma.residence.findUnique({ where: { id: residenceId }, select: { id: true } });
+    if (!residence) throw new NotFoundException('Résidence introuvable.');
+
+    const report = await this.prisma.listingReport.create({
+      data: {
+        residenceId,
+        reporterEmail: dto.reporterEmail,
+        reporterPhone: dto.reporterPhone,
+        reason: dto.reason,
+      },
+    });
+    this.logger.log(`[RESIDENCE_REPORTED] residence=${residenceId} report=${report.id}`);
+    return { id: report.id };
   }
 
   // --- BLOCKED DATES ---

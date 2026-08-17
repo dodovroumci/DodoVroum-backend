@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, NotFoundException, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, NotFoundException, UsePipes, ValidationPipe, HttpCode, HttpStatus } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ResidencesService } from './residences.service';
 import { CreateResidenceDto } from './dto/create-residence.dto';
@@ -8,6 +9,10 @@ import { BlockDateDto } from './dto/block-date.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ResidenceOwnerGuard } from './guards/residence-owner.guard';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { PartnerGuard } from '../common/guards/partner.guard';
+import { AdminGuard } from '../admin/guards/admin.guard';
+import { ModerateListingDto } from '../common/dto/moderate-listing.dto';
+import { ReportListingDto } from '../common/dto/report-listing.dto';
 
 @ApiTags('Residences')
 @Controller('residences')
@@ -21,8 +26,8 @@ export class ResidencesController {
 
   @Post()
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ 
+  @UseGuards(JwtAuthGuard, PartnerGuard)
+  @ApiOperation({
     summary: 'Créer une résidence',
     description: 'Les administrateurs peuvent spécifier un propriétaire via proprietaireId. Sinon, l\'utilisateur connecté devient le propriétaire.'
   })
@@ -49,6 +54,23 @@ export class ResidencesController {
     }
     
     return this.residencesService.create(createResidenceDto, ownerId);
+  }
+
+  @Patch(':id/moderation')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @ApiOperation({ summary: "Modérer une annonce résidence (masquer/suspendre/réactiver) — admin uniquement" })
+  async moderate(@Param('id') id: string, @Body() dto: ModerateListingDto) {
+    return this.residencesService.setModerationStatus(id, dto.status);
+  }
+
+  @Post(':id/report')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 600000 } })
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Signaler une annonce résidence (public)' })
+  async report(@Param('id') id: string, @Body() dto: ReportListingDto) {
+    return this.residencesService.reportListing(id, dto);
   }
 
   @Get()

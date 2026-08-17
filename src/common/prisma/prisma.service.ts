@@ -95,6 +95,10 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     return this.$raw.userDevice;
   }
 
+  get listingReport(): PrismaClient['listingReport'] {
+    return this.$raw.listingReport;
+  }
+
   // ── Transactions & raw queries ───────────────────────────────────────────
 
   get $transaction(): ExtendedPrismaClient['$transaction'] {

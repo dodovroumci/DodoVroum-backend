@@ -38,6 +38,10 @@ model User {
   identityPhotoBack  String?
   identityPhotoExtra String?
 
+  // --- ACCEPTATION CONTRAT DE PARTENARIAT (auto-inscription propriétaire) ---
+  contractAcceptedAt DateTime?
+  contractVersion    String?
+
   // --- RELATIONS ---
   bookings           Booking[]
   favorites          Favorite[]
@@ -80,14 +84,17 @@ model Residence {
   longitude     Float?
   ownerId       String?
   typeResidence String?
+  moderationStatus ListingModerationStatus @default(ACTIVE)
   bookings      Booking[]
   favorites     Favorite[]
   offers        Offer[]
   owner         User?         @relation(fields: [ownerId], references: [id])
   reviews       Review[]
   blockedDates  BlockedDate[]
+
   deletedAt DateTime? 
   @@index([deletedAt])
+  reports       ListingReport[]
   @@index([city])
   @@index([pricePerDay])
   @@index([isActive])
@@ -95,6 +102,7 @@ model Residence {
   @@index([createdAt])
   @@index([ownerId])
   @@index([deletedAt])
+  @@index([moderationStatus])
   @@map("residences")
 }
 
@@ -123,14 +131,20 @@ model Vehicle {
   title        String?
   ownerId      String?
   plateNumber  String?
+  moderationStatus ListingModerationStatus @default(ACTIVE)
   bookings     Booking[]
   favorites    Favorite[]
   offers       Offer[]
   reviews      Review[]
   owner        User?         @relation(fields: [ownerId], references: [id])
   blockedDates BlockedDate[]
+
 deletedAt DateTime? 
   @@index([deletedAt])
+
+  reports      ListingReport[]
+
+
   @@index([brand])
   @@index([type])
   @@index([pricePerDay])
@@ -139,6 +153,7 @@ deletedAt DateTime?
   @@index([createdAt])
   @@index([ownerId])
   @@index([deletedAt])
+  @@index([moderationStatus])
   @@map("vehicles")
 }
 
@@ -367,6 +382,19 @@ enum UserRole {
   PROPRIETAIRE
 }
 
+/// Statut de modération admin d'une annonce (résidence/véhicule), distinct du
+/// toggle isActive contrôlé par le propriétaire lui-même.
+enum ListingModerationStatus {
+  ACTIVE
+  HIDDEN
+  SUSPENDED
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+}
+
 enum VehicleType {
   CAR
   SUV
@@ -422,6 +450,29 @@ enum VerificationStatus {
   VERIFIED
   REJECTED
   UNDER_REVIEW
+}
+
+/// Signalement d'une annonce par un client (fraude, non-conformité, etc.).
+/// Rattaché à un véhicule OU une résidence, jamais les deux (vérifié en service).
+model ListingReport {
+  id            String       @id @default(cuid())
+  vehicleId     String?
+  residenceId   String?
+  reporterEmail String
+  reporterPhone String?
+  reason        String       @db.Text
+  status        ReportStatus @default(OPEN)
+  createdAt     DateTime     @default(now())
+  resolvedAt    DateTime?
+  resolvedBy    String?
+  vehicle       Vehicle?     @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  residence     Residence?   @relation(fields: [residenceId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId])
+  @@index([residenceId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("listing_reports")
 }
 
 model UserDevice {
