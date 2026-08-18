@@ -66,16 +66,42 @@ export class UsersService {
       // Normalisation de l'email avant toute vérification
       if (data.email) data.email = data.email.toLowerCase().trim();
 
-      // Vérification d'unicité — évite que le catch générique avale le P2002
-      const existing = await this.prisma.user.findUnique({
-        where: { email: data.email },
-        select: { id: true },
-      });
-      if (existing) throw new ConflictException('Cet email est déjà utilisé.');
-
       if (data.password) {
         const salt = await bcrypt.genSalt(this.BCRYPT_SALT_ROUNDS);
         data.password = await bcrypt.hash(data.password, salt);
+      }
+
+      // Vérifie TOUS les comptes sur cet email, actifs ET soft-deleted — le
+      // client "soft-delete-aware" (this.prisma.user) ne verrait jamais un
+      // compte supprimé (findUnique y est réécrit avec deletedAt: null),
+      // d'où l'usage explicite de $raw ici pour distinguer les deux cas.
+      const existing = await this.prisma.$raw.user.findUnique({
+        where: { email: data.email },
+        select: { id: true, deletedAt: true },
+      });
+
+      if (existing && existing.deletedAt === null) {
+        throw new ConflictException('Cet email est déjà utilisé.');
+      }
+
+      if (existing && existing.deletedAt !== null) {
+        // Compte précédemment supprimé sur cet email : on le réactive plutôt
+        // que de bloquer, pour préserver l'historique (réservations, paiements)
+        // déjà rattaché à cet id — jamais recréer une ligne à part.
+        const reactivated = await this.prisma.$raw.user.update({
+          where: { id: existing.id },
+          data: {
+            ...data,
+            deletedAt: null,
+            isActive: true,
+            refreshTokenHash: null,
+            resetPasswordToken: null,
+            resetPasswordExpires: null,
+          },
+          select: this.getUserSelectFull(),
+        });
+        this.logger.log(`[REACTIVATE_USER] id=${existing.id} email=${data.email}`);
+        return this.normalizeUser(reactivated);
       }
 
       const user = await this.prisma.user.create({
@@ -85,8 +111,6 @@ export class UsersService {
       return this.normalizeUser(user);
     } catch (error) {
       if (error instanceof ConflictException) throw error;
-      // Un compte soft-deleted garde son email en base (contrainte unique réelle) :
-      // le pré-check ci-dessus ne le voit pas, donc la violation ne peut être détectée qu'ici.
       if (error.code === 'P2002') throw new ConflictException('Cet email est déjà utilisé.');
       this.logger.error(`[CREATE_USER_ERROR] ${error.message}`);
       throw new BadRequestException("Erreur lors de la création de l'utilisateur");
