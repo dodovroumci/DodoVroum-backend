@@ -651,6 +651,18 @@ private formatBookingResponse(booking: any) {
 
     const isAwaitingPayment = normalizedStatus === BookingStatus.AWAITING_PAYMENT;
 
+    const isConfirmed = !!booking.ownerConfirmedAt;
+    const isTerminated =
+      normalizedStatus === BookingStatus.CANCELLED ||
+      normalizedStatus === BookingStatus.EXPIRED;
+
+    // Coordonnées du client : partagées avec le propriétaire uniquement une fois
+    // la réservation confirmée (coordination du séjour / remise des clés), et tant
+    // qu'elle n'est pas annulée ou expirée. Avant, le client reste anonyme côté
+    // propriétaire (il ne voit que `clientName` + un identifiant tronqué).
+    const clientContactShared = isConfirmed && !isTerminated;
+    const clientPhone = clientContactShared ? (booking.user?.phone ?? null) : null;
+
     // Résolution du propriétaire : résidence > véhicule > résidence de l'offre
     const owner =
       booking.residence?.owner ||
@@ -699,7 +711,7 @@ private formatBookingResponse(booking: any) {
       keyRetrievedAt: booking.keyRetrievedAt,
       checkOutAt: booking.checkOutAt,
       ownerConfirmedAt: booking.ownerConfirmedAt,
-      isConfirmed: !!booking.ownerConfirmedAt,
+      isConfirmed,
       isPendingApproval: Boolean(isPendingApproval),
       isAwaitingPayment: Boolean(isAwaitingPayment),
 
@@ -708,6 +720,7 @@ private formatBookingResponse(booking: any) {
       checkOutDate: booking.endDate,
       clientId: booking.userId,
       clientName: booking.user ? `${booking.user.firstName} ${booking.user.lastName}` : 'Client Inconnu',
+      clientPhone,
       ownerName,
       ownerPhone,
       ownerId,
