@@ -116,6 +116,16 @@ export class CreateResidenceDto {
   @Min(1)
   nombreChambres?: number;
 
+  @ApiPropertyOptional({
+    example: 4,
+    description:
+      'Nombre de pièces (distinct de bedrooms). Optionnel côté API pour ne pas casser les clients existants ; obligatoire dans le dashboard.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  nombrePieces?: number;
+
   @ApiPropertyOptional({ example: 2 })
   @IsOptional()
   @IsInt()

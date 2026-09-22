@@ -72,6 +72,9 @@ model Residence {
   pricePerDay   Float
   capacity      Int
   bedrooms      Int
+  // Nombre de pièces (distinct de bedrooms). Nullable : les résidences
+  // créées avant l'ajout du champ n'ont pas de valeur.
+  nombrePieces  Int?
   bathrooms     Int
   amenities     String        @db.LongText
   images        String        @db.LongText
