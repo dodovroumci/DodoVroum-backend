@@ -141,6 +141,9 @@ export class ResidencesService {
           ...res,
           nom: res.title,
           prixParNuit: res.pricePerDay,
+          // Explicite : garantit la clé (null pour les anciennes résidences) et fait
+          // échouer la compilation si le client Prisma n'est pas régénéré.
+          nombrePieces: res.nombrePieces ?? null,
           imageUrl: images[0],
           images,
           averageRating: avg ? parseFloat(avg.toFixed(1)) : null,
@@ -176,6 +179,7 @@ export class ResidencesService {
       ...res,
       nom: res.title,
       prixParNuit: res.pricePerDay,
+      nombrePieces: res.nombrePieces ?? null,
       images: images,
       imageUrl: images[0],
       averageRating: avg ? parseFloat(avg.toFixed(1)) : null, // ✅ Note moyenne
