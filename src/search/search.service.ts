@@ -24,8 +24,13 @@ export class SearchService {
       this.offersService.search(query),
     ]);
 
-    // Forcer le typage en tableau
-    const residences = Array.isArray(residencesResult) ? residencesResult : [];
+    // Forcer le typage en tableau.
+    // ResidencesService.search() délègue à findAll(), qui renvoie une enveloppe
+    // paginée { data, pagination } et non un tableau brut : on extrait `data`
+    // tout en restant compatible si le service renvoyait un jour un tableau direct.
+    const residences = Array.isArray(residencesResult)
+      ? residencesResult
+      : (residencesResult?.data ?? []);
     const vehicles = Array.isArray(vehiclesResult) ? vehiclesResult : [];
     const offers = Array.isArray(offersResult) ? offersResult : [];
 

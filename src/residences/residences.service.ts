@@ -113,6 +113,7 @@ export class ResidencesService {
     if (search) {
       where.OR = [
         { title: { contains: search } },
+        { address: { contains: search } },
         { city: { contains: search } },
       ];
     }
