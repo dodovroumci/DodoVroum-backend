@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Public } from '../auth/decorators/public.decorator';
-import { PaymentsService } from './payments.service';
+import { GeniusPayWebhookMetadata, PaymentsService } from './payments.service';
 import { GeniusPaySignatureGuard } from './guards/geniuspay-signature.guard';
 import { GeniusPayWebhookIpGuard } from './guards/geniuspay-webhook-ip.guard';
 
@@ -66,8 +66,18 @@ export class PaymentsWebhookController {
       (data?.['channel'] as string | undefined) ??
       (body['channel'] as string | undefined);
 
+    // Métadonnées envoyées à l'init ({ bookingId, paymentId }), renvoyées telles quelles.
+    const rawMetadata = (data?.['metadata'] ?? body['metadata']) as Record<string, unknown> | undefined;
+    const metadata: GeniusPayWebhookMetadata | undefined =
+      rawMetadata && typeof rawMetadata === 'object'
+        ? {
+            bookingId: rawMetadata['bookingId']?.toString(),
+            paymentId: rawMetadata['paymentId']?.toString(),
+          }
+        : undefined;
+
     this.logger.log(`Webhook payment.success reçu (ref=${reference})`);
 
-    return this.paymentsService.validatePayment(reference, webhookAmount, channel);
+    return this.paymentsService.validatePayment(reference, webhookAmount, channel, metadata);
   }
 }

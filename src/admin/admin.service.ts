@@ -63,7 +63,7 @@ export class AdminService {
       this.prisma.user.count({ where: { role: 'ADMIN' } }),
       this.prisma.user.count({ where: { role: 'PROPRIETAIRE' } }),
       this.prisma.payment.findMany({
-        where: { status: 'COMPLETED' },
+        where: { status: 'COMPLETED', refundRequiredAt: null }, // hors remboursements à traiter
         select: { amount: true },
       }),
     ]);

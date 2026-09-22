@@ -24,6 +24,7 @@ export class StatsService {
         this.prisma.payment.aggregate({
           where: {
             status: 'COMPLETED',
+            refundRequiredAt: null, // argent reçu mais à rembourser : pas un revenu
             booking: ownerBookingScope(ownerId),
           },
           _sum: { amount: true },

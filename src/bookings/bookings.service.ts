@@ -5,7 +5,7 @@ import { BookingValidationService } from './services/booking-validation.service'
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { UpdateBookingDatesDto } from './dto/update-booking-dates.dto';
-import { Prisma, NotificationType, PaymentStatus, PaymentMethod, BookingStatus } from '@prisma/client';
+import { Prisma, NotificationType, PaymentStatus, PaymentMethod, BookingStatus, PaymentOption } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { FirebaseService } from '../notifications/firebase.service';
 
@@ -68,6 +68,7 @@ export class BookingsService {
         userId,
         totalPrice,
         amountToCharge,
+        paymentOption: normalizedPaymentOption as PaymentOption,
         startDate,
         endDate,
         paymentMethod,
@@ -95,6 +96,7 @@ export class BookingsService {
         await tx.payment.create({
           data: {
             amount: amountToCharge,
+            paymentOption: normalizedPaymentOption as PaymentOption,
             currency: 'XOF',
             status: PaymentStatus.PENDING,
             method: paymentMethod || PaymentMethod.CARD,
@@ -136,13 +138,14 @@ export class BookingsService {
     userId: string;
     totalPrice: number;
     amountToCharge: number;
+    paymentOption: PaymentOption;
     startDate: Date;
     endDate: Date;
     paymentMethod: any;
     overlapDto: CreateBookingDto;
     offerId: string;
   }) {
-    const { bookingData, userId, totalPrice, amountToCharge, startDate, endDate, paymentMethod, overlapDto, offerId } = params;
+    const { bookingData, userId, totalPrice, amountToCharge, paymentOption, startDate, endDate, paymentMethod, overlapDto, offerId } = params;
 
     // Lecture de l'offre avant la transaction (évite une requête imbriquée dans la tx)
     const offer = await this.prisma.offer.findUnique({
@@ -175,6 +178,7 @@ export class BookingsService {
         await tx.payment.create({
           data: {
             amount: amountToCharge,
+            paymentOption,
             currency: 'XOF',
             status: PaymentStatus.PENDING,
             method: paymentMethod || PaymentMethod.CARD,
@@ -633,7 +637,7 @@ private formatBookingResponse(booking: any) {
 
     const payments = booking.payments || [];
     const totalPaid = payments
-      .filter((p: any) => p.status === 'COMPLETED')
+      .filter((p: any) => p.status === 'COMPLETED' && !p.refundRequiredAt)
       .reduce((sum: number, p: any) => sum + p.amount, 0);
     const remainingBalance = Math.max(booking.totalPrice - totalPaid, 0);
     const paymentStatus =

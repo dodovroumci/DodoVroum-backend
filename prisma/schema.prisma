@@ -237,8 +237,20 @@ model Payment {
   currency      String        @default("EUR")
   status        PaymentStatus @default(PENDING)
   method        PaymentMethod
+  /// Référence GeniusPay de la session de ce Payment. Jamais écrasée une fois
+  /// renseignée : une nouvelle session crée un nouveau Payment.
   transactionId  String?
   webhookEventId String?      @unique @db.VarChar(255)
+  /// Type choisi à la création (null = Payment antérieur à ce champ, jamais déduit du montant).
+  paymentOption       PaymentOption?
+  /// Session GeniusPay active (checkout_url / expires_at renvoyés par GeniusPay).
+  checkoutUrl         String?        @db.VarChar(2048)
+  checkoutExpiresAt   DateTime?
+  /// Verrou d'initialisation : une seule création de session GeniusPay à la fois.
+  checkoutRequestedAt DateTime?
+  /// Argent reçu à rembourser manuellement (réservation non payable ou déjà payée).
+  refundRequiredAt    DateTime?
+  refundReason        RefundReason?
   createdAt      DateTime     @default(now())
   updatedAt     DateTime      @updatedAt
   userId        String
@@ -250,6 +262,8 @@ model Payment {
   @@index([bookingId])
   @@index([status])
   @@index([createdAt])
+  @@index([transactionId])
+  @@index([refundRequiredAt])
   @@map("payments")
 }
 
@@ -426,6 +440,21 @@ enum PaymentStatus {
   COMPLETED
   FAILED
   REFUNDED
+}
+
+/// Mêmes valeurs que BookingPaymentOption (DTO de création de réservation).
+enum PaymentOption {
+  FULL_PAYMENT
+  DOWN_PAYMENT
+}
+
+enum RefundReason {
+  /// Paiement reçu après expiration de la réservation
+  BOOKING_EXPIRED
+  /// Paiement reçu sur une réservation annulée
+  BOOKING_CANCELLED
+  /// Réservation déjà payée par un autre Payment
+  DOUBLE_PAYMENT
 }
 
 enum PaymentMethod {
