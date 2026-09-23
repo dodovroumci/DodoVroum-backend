@@ -22,6 +22,11 @@ SMTP_HOST="smtp.gmail.com"
 SMTP_PORT=587
 SMTP_USER="votre-email@gmail.com"
 SMTP_PASS="votre-mot-de-passe-app"
+# 465 = TLS implicite (true) ; 587 = STARTTLS (false). Par défaut : déduit du port.
+SMTP_SECURE=false
+MAIL_FROM="DodoVroum <no-reply@dodovroum.com>"
+# Page web de réinitialisation ; le token est ajouté en fragment (#token=...).
+PASSWORD_RESET_URL=https://dodovroum.com/reset-password
 
 # Firebase (push notifications)
 FIREBASE_CREDENTIALS_PATH=./firebase-service-account.json
