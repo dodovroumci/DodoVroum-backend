@@ -14,7 +14,9 @@ async function bootstrap() {
 
   // Derrière nginx / load balancer : req.ip et X-Forwarded-For fiables pour la whitelist webhook
   if (process.env.TRUST_PROXY === 'true' || process.env.TRUST_PROXY === '1') {
-    app.set('trust proxy', true);
+    // 1 = un seul proxy de confiance (nginx) : req.ip = IP vue par nginx,
+    // pas la valeur la plus à gauche de X-Forwarded-For (falsifiable par le client).
+    app.set('trust proxy', 1);
     logger.log('Trust proxy activé (TRUST_PROXY) — IP client fiable pour les webhooks');
   }
 
