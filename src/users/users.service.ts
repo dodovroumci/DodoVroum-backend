@@ -125,10 +125,20 @@ export class UsersService {
         // Compte précédemment supprimé sur cet email : on le réactive plutôt
         // que de bloquer, pour préserver l'historique (réservations, paiements)
         // déjà rattaché à cet id — jamais recréer une ligne à part.
+        // Le rôle et les champs propriétaire de l'ancien compte ne doivent pas
+        // survivre : même rôle qu'une création (CLIENT par défaut, PROPRIETAIRE
+        // uniquement via createOwnerSelfRegistration).
+        const role: UserRole = (data as { role?: UserRole }).role ?? UserRole.CLIENT;
+        const ownerFieldsReset =
+          role === UserRole.PROPRIETAIRE
+            ? {}
+            : { typeProprietaire: null, contractAcceptedAt: null, contractVersion: null };
         const reactivated = await this.prisma.$raw.user.update({
           where: { id: existing.id },
           data: {
             ...data,
+            role,
+            ...ownerFieldsReset,
             deletedAt: null,
             isActive: true,
             refreshTokenHash: null,
