@@ -39,10 +39,47 @@ export class UsersService {
     });
   }
 
-  async findByResetToken(token: string) {
-    return this.prisma.user.findUnique({
-      where: { resetPasswordToken: token },
+  /** Enregistre le hash SHA-256 d'un token de réinitialisation (remplace le précédent). */
+  async setPasswordResetToken(id: string, tokenHash: string, expiresAt: Date): Promise<void> {
+    await this.prisma.user.update({
+      where: { id },
+      data: { resetPasswordToken: tokenHash, resetPasswordExpires: expiresAt },
     });
+  }
+
+  /**
+   * Consomme atomiquement un token de réinitialisation : une seule requête
+   * peut réussir pour un même token (updateMany conditionnel, pas de lecture
+   * puis écriture). Le mot de passe est toujours haché ici avec bcrypt — sans
+   * l'heuristique « commence par $2 » de update(). Les sessions (refresh
+   * token) sont invalidées dans la même écriture.
+   *
+   * @returns l'id de l'utilisateur, ou null si le token est invalide, expiré,
+   *   déjà utilisé ou si le compte est inactif.
+   */
+  async resetPasswordWithToken(tokenHash: string, newPassword: string): Promise<string | null> {
+    const passwordHash = await bcrypt.hash(newPassword, this.BCRYPT_SALT_ROUNDS);
+    // Lecture pour la traçabilité uniquement : la validité est décidée par l'updateMany.
+    const holder = await this.prisma.user.findFirst({
+      where: { resetPasswordToken: tokenHash },
+      select: { id: true },
+    });
+    const consumed = await this.prisma.user.updateMany({
+      where: {
+        resetPasswordToken: tokenHash,
+        resetPasswordExpires: { gt: new Date() },
+        isActive: true,
+        deletedAt: null,
+      },
+      data: {
+        password: passwordHash,
+        resetPasswordToken: null,
+        resetPasswordExpires: null,
+        refreshTokenHash: null,
+      },
+    });
+    if (consumed.count !== 1) return null;
+    return holder?.id ?? 'unknown';
   }
 
   async findByIdForAuth(id: string) {

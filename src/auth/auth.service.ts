@@ -13,6 +13,10 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { MailService } from '../mail/mail.service';
 import { RegisterProprietaireDto } from './dto/register-proprietaire.dto';
+import { PASSWORD_MIN_LENGTH } from './dto/reset-password.dto';
+
+/** Durée de validité d'un lien de réinitialisation. */
+export const PASSWORD_RESET_TTL_MINUTES = 30;
 
 export interface LoginResponse {
   access_token: string;
@@ -170,41 +174,46 @@ export class AuthService {
     this.logger.log(`[LOGOUT] user=${userId}`);
   }
 
+  /**
+   * Demande de réinitialisation. Aucun effet visible pour un compte inexistant
+   * ou désactivé : l'appelant renvoie toujours la même réponse.
+   * Le token (32 octets aléatoires) n'existe en clair que dans le lien envoyé ;
+   * seul son SHA-256 est stocké, et il remplace toute demande précédente.
+   */
   async requestPasswordReset(email: string): Promise<void> {
     const user = await this.usersService.findByEmail(email.toLowerCase().trim());
-    if (!user) return;
+    if (!user || !user.isActive) return;
 
     const resetToken = crypto.randomBytes(32).toString('hex');
-    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MINUTES * 60 * 1000);
+    await this.usersService.setPasswordResetToken(user.id, this._hashToken(resetToken), expiresAt);
 
-    await this.usersService.update(user.id, {
-      resetPasswordToken: hashedToken,
-      resetPasswordExpires: new Date(Date.now() + 30 * 60 * 1000),
-    } as any);
-
-    // TODO: envoyer resetToken par email (nodemailer / SendGrid)
-    // Ne jamais logger le token brut en production
+    const baseUrl = (
+      this.configService.get<string>('PASSWORD_RESET_URL') || 'https://dodovroum.com/reset-password'
+    ).split('#')[0];
+    // Fragment (#) : le token n'est jamais envoyé au serveur web ni dans le Referer.
+    await this.mailService.sendPasswordResetEmail({
+      to: user.email,
+      firstName: user.firstName,
+      resetUrl: `${baseUrl}#token=${resetToken}`,
+      expiresInMinutes: PASSWORD_RESET_TTL_MINUTES,
+    });
+    // Ne jamais logger le token brut
     this.logger.log(`[PASSWORD_RESET_REQUESTED] user=${user.id}`);
   }
 
+  /**
+   * Consomme le token de façon atomique (usage unique), enregistre le nouveau
+   * mot de passe haché et invalide toutes les sessions.
+   * @returns false si le token est invalide, expiré ou déjà utilisé.
+   */
   async resetPassword(token: string, newPassword: string): Promise<boolean> {
-    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-    const user = await this.usersService.findByResetToken(hashedToken);
+    if (!token || !newPassword || newPassword.length < PASSWORD_MIN_LENGTH) return false;
 
-    if (!user || !user.resetPasswordExpires || user.resetPasswordExpires < new Date()) {
-      return false;
-    }
+    const userId = await this.usersService.resetPasswordWithToken(this._hashToken(token), newPassword);
+    if (!userId) return false;
 
-    await this.usersService.update(user.id, {
-      password: newPassword,
-      resetPasswordToken: null,
-      resetPasswordExpires: null,
-    } as any);
-
-    // Invalidate all sessions after password reset
-    await this.usersService.updateRefreshTokenHash(user.id, null);
-    this.logger.log(`[PASSWORD_RESET_DONE] user=${user.id} — all sessions invalidated`);
-
+    this.logger.log(`[PASSWORD_RESET_DONE] user=${userId} — all sessions invalidated`);
     return true;
   }
 

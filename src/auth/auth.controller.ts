@@ -12,22 +12,34 @@ import {
   Request,
   HttpCode,
   HttpStatus,
-  BadRequestException
+  BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService, LoginResponse, RefreshResponse } from './auth.service';
 import { LocalAuthGuard } from './guards/local-auth.guard';
-import { AuthThrottlerGuard } from './guards/auth-throttler.guard';
+import { AuthIpThrottle, AuthThrottlerGuard } from './guards/auth-throttler.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RegisterProprietaireDto } from './dto/register-proprietaire.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+
+export const PASSWORD_RESET_REQUESTED_MESSAGE =
+  'Si un compte est associé à cette adresse, vous recevrez un email avec les instructions.';
+export const PASSWORD_RESET_INVALID_TOKEN_MESSAGE =
+  'Ce lien est invalide ou a expiré. Demandez-en un nouveau.';
+export const PASSWORD_RESET_DONE_MESSAGE =
+  'Votre mot de passe a été réinitialisé. Vous pouvez vous connecter.';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(private authService: AuthService) {}
 
   @UseGuards(LocalAuthGuard, AuthThrottlerGuard)
@@ -96,31 +108,33 @@ export class AuthController {
 
   @UseGuards(AuthThrottlerGuard)
   @Throttle({ default: { limit: 3, ttl: 600000 } })
+  @AuthIpThrottle({ limit: 10, ttl: 600000 })
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Demander une réinitialisation de mot de passe' })
-  async forgotPassword(@Body('email') email: string) {
-    if (!email) throw new BadRequestException('L\'email est requis');
-    await this.authService.requestPasswordReset(email);
-    return {
-      message: 'Si cet email correspond à un compte, vous recevrez un lien de réinitialisation sous peu.'
-    };
+  @ApiBody({ type: ForgotPasswordDto })
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    // Traitement (lookup, token, SMTP) en arrière-plan : réponse et durée
+    // identiques que le compte existe ou non.
+    this.authService.requestPasswordReset(dto.email).catch((error) =>
+      this.logger.error(`[PASSWORD_RESET_REQUEST_FAILED] ${error?.message ?? error}`),
+    );
+    return { message: PASSWORD_RESET_REQUESTED_MESSAGE };
   }
 
+  @UseGuards(AuthThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 900000 } })
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Réinitialiser le mot de passe via le token' })
-  async resetPassword(
-    @Body('token') token: string,
-    @Body('password') pass: string
-  ) {
-    if (!token || !pass) throw new BadRequestException('Token et nouveau mot de passe requis');
-
-    const success = await this.authService.resetPassword(token, pass);
+  @ApiBody({ type: ResetPasswordDto })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    const success = await this.authService.resetPassword(dto.token, dto.password);
     if (!success) {
-      throw new BadRequestException('Le lien de récupération est invalide ou a expiré');
+      // Même message pour un token invalide, expiré ou déjà utilisé.
+      throw new BadRequestException(PASSWORD_RESET_INVALID_TOKEN_MESSAGE);
     }
-    return { message: 'Votre mot de passe a été mis à jour avec succès.' };
+    return { message: PASSWORD_RESET_DONE_MESSAGE };
   }
 
   @UseGuards(AuthThrottlerGuard)
