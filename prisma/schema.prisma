@@ -251,6 +251,9 @@ model Payment {
   /// Argent reçu à rembourser manuellement (réservation non payable ou déjà payée).
   refundRequiredAt    DateTime?
   refundReason        RefundReason?
+  /// Date réelle d'encaissement (passage à COMPLETED). Null tant que non payé.
+  /// Paiements antérieurs au champ : renseigné avec updatedAt (approximation).
+  paidAt              DateTime?
   createdAt      DateTime     @default(now())
   updatedAt     DateTime      @updatedAt
   userId        String
@@ -264,6 +267,7 @@ model Payment {
   @@index([createdAt])
   @@index([transactionId])
   @@index([refundRequiredAt])
+  @@index([paidAt])
   @@map("payments")
 }
 

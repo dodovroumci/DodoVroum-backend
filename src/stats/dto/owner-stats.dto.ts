@@ -13,6 +13,13 @@ export class OwnerStatsDto {
   @ApiProperty({ description: 'Réservations liées aux biens du propriétaire' })
   totalBookings: number;
 
-  @ApiProperty({ description: 'Somme des paiements complétés (réservations concernées)' })
+  @ApiProperty({
+    description: 'Argent encaissé : somme des paiements COMPLETED non marqués à rembourser',
+  })
   totalRevenue: number;
+
+  @ApiProperty({
+    description: 'Argent encaissé depuis le 1er du mois (UTC), selon la date de paiement (paidAt)',
+  })
+  monthRevenue: number;
 }

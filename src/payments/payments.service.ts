@@ -513,6 +513,7 @@ export class PaymentsService {
           },
           data: {
             status: PaymentStatus.COMPLETED,
+            paidAt: this.now(),
             method: this.mapChannelToMethod(channel),
             webhookEventId: reference,
             checkoutRequestedAt: null,

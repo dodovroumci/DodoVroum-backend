@@ -332,6 +332,20 @@ describe('PaymentsService — sessions GeniusPay et webhook', () => {
       expect(prisma.bookings.get('bk-1').status).toBe('PAID');
     });
 
+    it('encaissement : paidAt = date du webhook, inchangé par une seconde livraison', async () => {
+      seedBooking();
+      await init('FULL');
+      expect(prisma.payments[0].paidAt ?? null).toBeNull();
+
+      const paidAt = new Date(service.clock);
+      await expect(webhook('MTX-1', 100000)).resolves.toEqual({ status: 'success' });
+      expect(prisma.payments[0].paidAt).toEqual(paidAt);
+
+      service.clock = new Date(service.clock.getTime() + 2 * HOUR);
+      await expect(webhook('MTX-1', 100000)).resolves.toEqual({ status: 'already_processed' });
+      expect(prisma.payments[0].paidAt).toEqual(paidAt);
+    });
+
     it('8/10. ancienne référence (session remplacée) payée : Payment identifié, réservation confirmée', async () => {
       seedBooking();
       await init('FULL');
