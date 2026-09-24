@@ -28,7 +28,13 @@ import { Public } from '../auth/decorators/public.decorator';
 export class PaymentsController { // <--- VÉRIFIE BIEN LE "export" ICI
   constructor(private readonly paymentsService: PaymentsService) {}
 
+  /**
+   * Création manuelle d'un Payment : admin uniquement. Les clients ne créent
+   * jamais de Payment eux-mêmes (créé avec la réservation, puis à l'init GeniusPay).
+   */
   @Post()
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Créer un paiement PENDING (admin uniquement)' })
   create(@Body() createPaymentDto: CreatePaymentDto, @Request() req) {
     return this.paymentsService.create(createPaymentDto, req.user.id);
   }

@@ -458,4 +458,61 @@ describe('PaymentsService — sessions GeniusPay et webhook', () => {
       expect(prisma.payments[0].status).toBe('PENDING');
     });
   });
+  describe('sécurité : statut et montants fixés par le serveur', () => {
+    const webhook = (ref: string, amount?: number) => service.validatePayment(ref, amount, 'momo');
+
+    it('create() : statut/paidAt/transactionId/webhookEventId/refundRequiredAt glissés dans le payload ignorés', async () => {
+      seedBooking();
+      const smuggled: any = {
+        amount: 100000,
+        method: 'CARD',
+        bookingId: 'bk-1',
+        status: 'COMPLETED',
+        paidAt: new Date('2020-01-01T00:00:00Z'),
+        transactionId: 'MTX-VOLE',
+        webhookEventId: 'MTX-VOLE',
+        refundRequiredAt: new Date('2020-01-01T00:00:00Z'),
+        paymentOption: 'DOWN_PAYMENT',
+      };
+
+      const created = await service.create(smuggled, 'admin-1');
+
+      expect(created).toMatchObject({
+        status: 'PENDING',
+        transactionId: null,
+        webhookEventId: null,
+        refundRequiredAt: null,
+        paymentOption: null,
+      });
+      expect(created.paidAt ?? null).toBeNull();
+    });
+
+    it('create() : les paiements existants ne sont pas modifiés', async () => {
+      seedBooking();
+      const before = prisma.payments.map((p) => ({ ...p }));
+
+      await service.create({ amount: 5000, method: 'CARD', bookingId: 'bk-1' } as any, 'admin-1');
+
+      expect(prisma.payments).toHaveLength(before.length + 1);
+      expect(prisma.payments.slice(0, before.length)).toEqual(before);
+    });
+
+    it('acompte = 30 % du totalPrice à l\'initialisation (règle inchangée)', async () => {
+      seedBooking({}, 'DOWN_PAYMENT');
+      await init('DEPOSIT');
+      expect(mockedPost.mock.calls[0][1].amount).toBe(30000);
+    });
+
+    it('webhook livré deux fois : un seul paiement COMPLETED, montant non doublé', async () => {
+      seedBooking();
+      await init('FULL');
+      await expect(webhook('MTX-1', 100000)).resolves.toEqual({ status: 'success' });
+      await expect(webhook('MTX-1', 100000)).resolves.toEqual({ status: 'already_processed' });
+
+      const collected = prisma.payments
+        .filter((p) => p.status === 'COMPLETED' && !p.refundRequiredAt)
+        .reduce((sum, p) => sum + p.amount, 0);
+      expect(collected).toBe(100000);
+    });
+  });
 });

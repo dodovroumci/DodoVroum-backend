@@ -23,6 +23,7 @@ import {
 } from '@prisma/client';
 import axios from 'axios';
 import * as https from 'https';
+import { computePaymentAmounts } from './payment-amounts';
 
 /** Réservation encore en attente de paiement. */
 const PAYABLE_BOOKING_STATUSES: BookingStatus[] = [BookingStatus.AWAITING_PAYMENT, BookingStatus.PENDING];
@@ -53,8 +54,6 @@ type WebhookOutcome =
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
-  private readonly DEPOSIT_PERCENTAGE = 0.3;
-  private readonly MIN_AMOUNT_XOF = 200;
   /** Délai d'expiration backend d'une réservation non payée (BookingsProcessor). */
   private readonly UNPAID_BOOKING_LIFETIME_MS = 48 * 60 * 60 * 1000;
   /** Durée de vie documentée d'un checkout GeniusPay si `expires_at` est absent. */
@@ -241,14 +240,7 @@ export class PaymentsService {
   }
 
   private computeAmounts(totalPrice: number, option: PaymentOption) {
-    const raw =
-      option === PaymentOption.DOWN_PAYMENT
-        ? Math.ceil(totalPrice * this.DEPOSIT_PERCENTAGE)
-        : Math.ceil(totalPrice);
-    const amount = Math.max(Math.round(raw), this.MIN_AMOUNT_XOF);
-    const baseAmount = Math.ceil(totalPrice);
-    const fees = Math.max(Math.round(amount - baseAmount), 0);
-    return { amount, baseAmount, fees };
+    return computePaymentAmounts(totalPrice, option);
   }
 
   /**
@@ -643,8 +635,22 @@ export class PaymentsService {
     return this.prisma.payment.delete({ where: { id } });
   }
 
+  /**
+   * Création manuelle (admin uniquement, cf. PaymentsController). Seuls les
+   * champs du DTO sont écrits et le statut est toujours PENDING : seul le
+   * webhook GeniusPay signé (ou une correction admin via update) le passe à COMPLETED.
+   */
   async create(dto: CreatePaymentDto, userId: string) {
-    return this.prisma.payment.create({ data: { ...dto, userId } as any });
+    return this.prisma.payment.create({
+      data: {
+        amount: dto.amount,
+        currency: dto.currency,
+        method: dto.method,
+        bookingId: dto.bookingId,
+        userId,
+        status: PaymentStatus.PENDING,
+      },
+    });
   }
 
   async checkPaymentStatus(bookingId: string) {

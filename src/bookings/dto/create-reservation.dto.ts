@@ -64,8 +64,9 @@ export class CreateReservationDto {
   @IsOptional() @IsEnum(ReservationPaymentOption)
   option_paiement?: ReservationPaymentOption;
 
-  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0)
-  downPaymentAmount?: number; // Attendu
+  @ApiPropertyOptional({ description: 'Ignoré : acompte calculé côté serveur (30 %, minimum 200 XOF)' })
+  @IsOptional() @IsNumber() @Min(0)
+  downPaymentAmount?: number; // Ignoré par BookingsService (montant serveur)
 
   @IsOptional() @IsNumber() @Min(0)
   montant_acompte?: number;

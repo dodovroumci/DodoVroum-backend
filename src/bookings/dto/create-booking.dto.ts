@@ -88,7 +88,8 @@ export class CreateBookingDto {
 
   @ApiPropertyOptional({
     example: 150,
-    description: 'Montant de l’acompte si paymentOption est DOWN_PAYMENT'
+    description:
+      'Ignoré (conservé pour compatibilité) : l’acompte est calculé côté serveur, 30 % du prix total, minimum 200 XOF.'
   })
   @ValidateIf((o) => o.paymentOption === BookingPaymentOption.DOWN_PAYMENT)
   @IsNumber()

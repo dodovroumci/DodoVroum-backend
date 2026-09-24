@@ -5,11 +5,15 @@
 
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsNumber, IsOptional, IsEnum, Min } from 'class-validator';
-import { PaymentStatus, PaymentMethod } from '@prisma/client';
+import { PaymentMethod } from '@prisma/client';
 
 /**
  * @class CreatePaymentDto
  * @description Schéma de validation pour l'enregistrement d'un paiement.
+ *
+ * `status`, `paidAt`, `transactionId`, `webhookEventId`, `refundRequiredAt` et
+ * `paymentOption` sont volontairement absents : un Payment est toujours créé
+ * PENDING et le ValidationPipe global (forbidNonWhitelisted) rejette ces champs.
  */
 export class CreatePaymentDto {
   @ApiProperty({ 
@@ -31,17 +35,6 @@ export class CreatePaymentDto {
   currency?: string;
 
   @ApiProperty({ 
-    enum: PaymentStatus, 
-    enumName: 'PaymentStatus', // ✅ Correction Swagger
-    example: PaymentStatus.PENDING, 
-    required: false,
-    description: 'Statut actuel du paiement'
-  })
-  @IsOptional()
-  @IsEnum(PaymentStatus)
-  status?: PaymentStatus;
-
-  @ApiProperty({ 
     enum: PaymentMethod, 
     enumName: 'PaymentMethod', // ✅ Correction Swagger
     example: PaymentMethod.CARD,
@@ -49,15 +42,6 @@ export class CreatePaymentDto {
   })
   @IsEnum(PaymentMethod)
   method: PaymentMethod;
-
-  @ApiProperty({ 
-    example: 'txn_123456789', 
-    required: false,
-    description: 'ID de transaction provenant du fournisseur (Stripe, etc.)'
-  })
-  @IsOptional()
-  @IsString()
-  transactionId?: string;
 
   @ApiProperty({ 
     example: 'booking-id-123',

@@ -8,6 +8,7 @@ import { UpdateBookingDatesDto } from './dto/update-booking-dates.dto';
 import { Prisma, NotificationType, PaymentStatus, PaymentMethod, BookingStatus, PaymentOption } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { FirebaseService } from '../notifications/firebase.service';
+import { computePaymentAmounts } from '../payments/payment-amounts';
 
 /**
  * @class BookingsService
@@ -29,7 +30,8 @@ export class BookingsService {
   async create(createBookingDto: CreateBookingDto, userId: string) {
     await this.bookingValidationService.validateBooking(createBookingDto);
 
-    const { paymentOption, downPaymentAmount, paymentMethod, ...bookingPayload } = createBookingDto;
+    // downPaymentAmount du client est ignoré : l'acompte est calculé par le serveur.
+    const { paymentOption, downPaymentAmount: _clientDownPayment, paymentMethod, ...bookingPayload } = createBookingDto;
 
     const startDate = new Date(bookingPayload.startDate);
     const endDate = new Date(bookingPayload.endDate);
@@ -51,7 +53,11 @@ export class BookingsService {
     );
 
     const normalizedPaymentOption = (paymentOption || 'FULL_PAYMENT') as 'DOWN_PAYMENT' | 'FULL_PAYMENT';
-    const amountToCharge = normalizedPaymentOption === 'DOWN_PAYMENT' ? downPaymentAmount : totalPrice;
+    // Acompte : même règle que l'initialisation GeniusPay (30 %, minimum 200 XOF).
+    const amountToCharge =
+      normalizedPaymentOption === 'DOWN_PAYMENT'
+        ? computePaymentAmounts(totalPrice, PaymentOption.DOWN_PAYMENT).amount
+        : totalPrice;
 
     const { status: _ignoredStatus, ...bookingData } = bookingPayload;
 
