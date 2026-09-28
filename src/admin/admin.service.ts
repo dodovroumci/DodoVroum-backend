@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AdminStatsDto } from './dto/admin-stats.dto';
+import { FINANCE_BOOKING_SELECT, summarizeFinance } from '../stats/booking-finance';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -42,6 +43,7 @@ export class AdminService {
       totalAdmins,
       totalProprietaires,
       paymentsData,
+      financeBookings,
     ] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.residence.count({ where: { isActive: true } }),
@@ -66,6 +68,7 @@ export class AdminService {
         where: { status: 'COMPLETED', refundRequiredAt: null }, // hors remboursements à traiter
         select: { amount: true },
       }),
+      this.prisma.booking.findMany({ select: FINANCE_BOOKING_SELECT }),
     ]);
 
     // Calculer le revenu total
@@ -84,6 +87,7 @@ export class AdminService {
       activeUsers,
       totalAdmins,
       totalProprietaires,
+      finance: summarizeFinance(financeBookings),
     };
   }
 

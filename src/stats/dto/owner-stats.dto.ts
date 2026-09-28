@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { FinanceSummaryDto } from './finance-summary.dto';
 
 export class OwnerStatsDto {
   @ApiProperty({ description: 'Nombre de résidences actives du propriétaire' })
@@ -22,4 +23,7 @@ export class OwnerStatsDto {
     description: 'Argent encaissé depuis le 1er du mois (UTC), selon la date de paiement (paidAt)',
   })
   monthRevenue: number;
+
+  @ApiProperty({ type: FinanceSummaryDto, description: 'Revenus réalisés / en attente (commission 10 %, propriétaire 90 %)' })
+  finance: FinanceSummaryDto;
 }

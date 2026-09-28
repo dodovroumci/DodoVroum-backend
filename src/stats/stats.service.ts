@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { OwnerStatsDto } from './dto/owner-stats.dto';
+import { FINANCE_BOOKING_SELECT, summarizeFinance } from './booking-finance';
 
 const ownerBookingScope = (ownerId: string) => ({
   OR: [
@@ -27,7 +28,7 @@ export class StatsService {
 
   async getOwnerStats(ownerId: string): Promise<OwnerStatsDto> {
     const now = new Date();
-    const [totalResidences, totalVehicles, totalOffers, totalBookings, paymentsSum, monthSum] =
+    const [totalResidences, totalVehicles, totalOffers, totalBookings, paymentsSum, monthSum, financeBookings] =
       await Promise.all([
         this.prisma.residence.count({ where: { ownerId, isActive: true } }),
         this.prisma.vehicle.count({ where: { ownerId, isActive: true } }),
@@ -44,6 +45,10 @@ export class StatsService {
           },
           _sum: { amount: true },
         }),
+        this.prisma.booking.findMany({
+          where: ownerBookingScope(ownerId),
+          select: FINANCE_BOOKING_SELECT,
+        }),
       ]);
 
     return {
@@ -53,6 +58,7 @@ export class StatsService {
       totalBookings,
       totalRevenue: Number(paymentsSum._sum.amount ?? 0),
       monthRevenue: Number(monthSum._sum.amount ?? 0),
+      finance: summarizeFinance(financeBookings, now),
     };
   }
 }

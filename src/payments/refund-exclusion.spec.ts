@@ -50,7 +50,7 @@ describe('Paiements à rembourser exclus des montants payés et des revenus', ()
       residence: { count },
       vehicle: { count },
       offer: { count },
-      booking: { count },
+      booking: { count, findMany: jest.fn().mockResolvedValue([]) },
       payment: { aggregate },
     };
 
@@ -67,7 +67,7 @@ describe('Paiements à rembourser exclus des montants payés et des revenus', ()
       residence: { count },
       vehicle: { count },
       offer: { count },
-      booking: { count },
+      booking: { count, findMany: jest.fn().mockResolvedValue([]) },
       payment: { count, findMany },
       identityVerification: { count },
     };

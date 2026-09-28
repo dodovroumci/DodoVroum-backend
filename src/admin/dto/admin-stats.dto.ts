@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { FinanceSummaryDto } from '../../stats/dto/finance-summary.dto';
 
 export class AdminStatsDto {
   @ApiProperty({ example: 150 })
@@ -36,5 +37,8 @@ export class AdminStatsDto {
 
   @ApiProperty({ example: 20 })
   totalProprietaires: number;
+
+  @ApiProperty({ type: FinanceSummaryDto, description: 'Volume / commission DodoVroum réalisés et en attente' })
+  finance: FinanceSummaryDto;
 }
 

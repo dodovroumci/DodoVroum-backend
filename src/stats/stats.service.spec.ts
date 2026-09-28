@@ -47,7 +47,7 @@ function fakePrisma(payments: Payment[]) {
       residence: { count },
       vehicle: { count },
       offer: { count },
-      booking: { count },
+      booking: { count, findMany: jest.fn().mockResolvedValue([]) },
       payment: { aggregate },
     } as any,
   };

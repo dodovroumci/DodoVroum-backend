@@ -9,6 +9,7 @@ import { Prisma, NotificationType, PaymentStatus, PaymentMethod, BookingStatus, 
 import { NotificationsService } from '../notifications/notifications.service';
 import { FirebaseService } from '../notifications/firebase.service';
 import { computePaymentAmounts } from '../payments/payment-amounts';
+import { bookingFinance } from '../stats/booking-finance';
 
 /**
  * @class BookingsService
@@ -532,12 +533,13 @@ export class BookingsService {
 
   // --- MÉTHODES DE LECTURE ---
 
-  async findAll() {
+  /** @param includeFinance détail financier (commission, revenu propriétaire) : admin uniquement. */
+  async findAll(includeFinance = false) {
     const bookings = await this.prisma.booking.findMany({
       include: this.getBookingInclude(),
       orderBy: { createdAt: 'desc' },
     });
-    return bookings.map(b => this.formatBookingResponse(b));
+    return bookings.map(b => this.formatBookingResponse(b, { includeFinance }));
   }
 
   async findOne(id: string, requestingUserId: string, requestingRole: string) {
@@ -561,7 +563,9 @@ export class BookingsService {
       if (!hasAccess) throw new BadRequestException('Accès refusé');
     }
 
-    return this.formatBookingResponse(booking);
+    // Accès validé : hors client de la réservation, c'est l'admin ou le propriétaire du bien.
+    const includeFinance = requestingRole === 'ADMIN' || booking.userId !== requestingUserId;
+    return this.formatBookingResponse(booking, { includeFinance });
   }
 
   async findByUser(userId: string) {
@@ -585,7 +589,7 @@ export class BookingsService {
       include: this.getBookingInclude(),
       orderBy: { createdAt: 'desc' },
     });
-    return bookings.map(b => this.formatBookingResponse(b));
+    return bookings.map(b => this.formatBookingResponse(b, { includeFinance: true }));
   }
 
   // --- HELPERS ET MAPPING DE RÉPONSE ---
@@ -629,7 +633,7 @@ export class BookingsService {
     return null;
   }
 
-private formatBookingResponse(booking: any) {
+private formatBookingResponse(booking: any, options: { includeFinance?: boolean } = {}) {
     const statusMap: Record<string, string> = {
       'PENDING': 'pending',
       'AWAITING_PAYMENT': 'awaitingPayment',
@@ -713,6 +717,9 @@ private formatBookingResponse(booking: any) {
       residenceImage: booking.offer?.imageUrl || this.getFirstImage(booking.residence?.images) || this.getFirstImage(booking.vehicle?.images),
       totalPrice: booking.totalPrice,
       totalPaid,
+      // Revenus (propriétaire / admin uniquement, jamais au client) : mêmes règles
+      // que /stats, voir src/stats/booking-finance.ts.
+      ...(options.includeFinance && { finance: bookingFinance(booking) }),
       remainingBalance,
       paymentStatus,
       status: statusMap[booking.status] || booking.status.toLowerCase(),

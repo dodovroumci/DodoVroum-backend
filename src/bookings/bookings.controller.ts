@@ -28,7 +28,7 @@ export class BookingsController {
   @ApiResponse({ status: 200, description: 'Liste des réservations' })
   findAll(@Request() req) {
     const { id, role } = req.user;
-    if (role === 'ADMIN') return this.bookingsService.findAll();
+    if (role === 'ADMIN') return this.bookingsService.findAll(true);
     if (role === 'PROPRIETAIRE') return this.bookingsService.findByOwner(id);
     return this.bookingsService.findByUser(id);
   }
