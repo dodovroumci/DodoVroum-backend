@@ -514,10 +514,28 @@ export class BookingsService {
     return this.formatBookingResponse(updated);
   }
 
-  async confirmCheckOut(id: string, userId: string) {
-    const booking = await this.prisma.booking.findUnique({ where: { id }, select: { status: true, userId: true } });
+  /**
+   * Fin du séjour (check-out) : par le client, le propriétaire du bien ou un admin.
+   * Sans action, le séjour est terminé automatiquement 24 h après sa date de fin
+   * (BookingsProcessor.handleAutoCheckout).
+   */
+  async confirmCheckOut(id: string, userId: string, role?: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id },
+      select: {
+        status: true,
+        userId: true,
+        residence: { select: { ownerId: true } },
+        vehicle: { select: { ownerId: true } },
+        offer: { select: { ownerId: true } },
+      },
+    });
     if (!booking) throw new NotFoundException('Réservation non trouvée');
-    if (booking.userId !== userId) throw new ForbiddenException('Action non autorisée.');
+    const isClient = booking.userId === userId;
+    const isPropertyOwner = [booking.residence?.ownerId, booking.vehicle?.ownerId, booking.offer?.ownerId].includes(userId);
+    if (!isClient && !isPropertyOwner && role !== 'ADMIN') {
+      throw new ForbiddenException('Action non autorisée.');
+    }
     const checkoutAllowed = ['EN_COURS_SEJOUR', 'ONGOING', BookingStatus.ONGOING] as string[];
     if (!checkoutAllowed.includes(booking.status as string)) {
       throw new BadRequestException(`Le check-out nécessite une réservation en cours (statut actuel : ${booking.status}).`);

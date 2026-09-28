@@ -190,7 +190,7 @@ export class ReservationsController {
   @Patch(':id/confirm-checkout')
   @ApiOperation({ summary: 'Confirmer le check-out' })
   confirmCheckOut(@Param('id') id: string, @Request() req) {
-    return this.bookingsService.confirmCheckOut(id, req.user.id);
+    return this.bookingsService.confirmCheckOut(id, req.user.id, req.user.role);
   }
 
   @Patch(':id/cancel')

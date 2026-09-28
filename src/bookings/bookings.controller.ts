@@ -154,14 +154,14 @@ export class BookingsController {
 
   @Patch(':id/confirm-checkout')
   @ApiOperation({ 
-    summary: 'Confirmer le check-out par le client',
-    description: 'Passe une réservation de EN_COURS_SEJOUR à TERMINEE. Seul le client propriétaire de la réservation peut confirmer.'
+    summary: 'Confirmer le check-out (fin du séjour)',
+    description: 'Passe une réservation EN_COURS_SEJOUR à COMPLETED. Autorisé au client de la réservation, au propriétaire du bien et aux administrateurs ; sinon fait automatiquement 24 h après la date de fin.'
   })
   @ApiResponse({ status: 200, description: 'Check-out confirmé avec succès' })
   @ApiResponse({ status: 400, description: 'Action non autorisée ou conditions non remplies' })
   @ApiResponse({ status: 404, description: 'Réservation non trouvée' })
   confirmCheckOut(@Param('id') id: string, @Request() req) {
-    return this.bookingsService.confirmCheckOut(id, req.user.id);
+    return this.bookingsService.confirmCheckOut(id, req.user.id, req.user.role);
   }
 
   @Patch(':id/cancel')
