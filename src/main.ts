@@ -68,7 +68,10 @@ async function bootstrap() {
   });
 
   const port = process.env.PORT || 3000;
-  await app.listen(port, '0.0.0.0');
+  // Production : HOST=127.0.0.1 (seul nginx joint l'API). Par défaut 0.0.0.0 (dev, Docker).
+  const host = process.env.HOST || '0.0.0.0';
+  await app.listen(port, host);
+  logger.log(`Écoute sur ${host}:${port}`);
 
   logger.log(`🚀 API: https://api.dodovroum.com/api`);
   logger.log(`📖 Docs: https://api.dodovroum.com/docs`);
