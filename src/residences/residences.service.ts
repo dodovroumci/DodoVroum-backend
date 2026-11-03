@@ -71,16 +71,20 @@ export class ResidencesService {
       nombreChambres: 'bedrooms',
       nombreSallesBain: 'bathrooms', 
       commodites: 'amenities',
-      proprietaireId: 'ownerId' // C'est ici que ça bloquait dans tes logs
     };
 
     Object.keys(mapping).forEach(oldKey => {
       if (transformed[oldKey] !== undefined) {
         transformed[mapping[oldKey]] = transformed[oldKey];
         // SUPPRESSION CRITIQUE de l'ancien champ pour Prisma
-        delete transformed[oldKey]; 
+        delete transformed[oldKey];
       }
     });
+
+    // Le propriétaire n'est jamais lu dans le corps de la requête : create() reçoit
+    // l'ownerId déjà résolu par le contrôleur (utilisateur connecté, ou cible validée par un admin).
+    delete transformed.proprietaireId;
+    delete transformed.ownerId;
 
     // Gestion JSON pour Prisma
     if (Array.isArray(transformed.images)) transformed.images = JSON.stringify(transformed.images);
@@ -334,14 +338,13 @@ export class ResidencesService {
 
   // --- WRITE METHODS ---
 
-  async create(dto: CreateResidenceDto, ownerIdFromAuth?: string) {
+  async create(dto: CreateResidenceDto, ownerId: string) {
     try {
-      // Transformation et nettoyage
+      // Transformation et nettoyage (proprietaireId/ownerId du corps sont écartés)
       const data = this.transformResidenceDto(dto);
-      
-      const finalOwnerId = data.ownerId || ownerIdFromAuth;
-      if (!finalOwnerId) throw new BadRequestException('ID propriétaire requis');
-      data.ownerId = finalOwnerId;
+
+      if (!ownerId) throw new BadRequestException('ID propriétaire requis');
+      data.ownerId = ownerId;
 
       // Création Prisma garantie sans "proprietaireId"
       const res = await this.prisma.residence.create({ data });

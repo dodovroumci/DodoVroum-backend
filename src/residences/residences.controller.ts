@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, NotFoundException, UsePipes, ValidationPipe, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, NotFoundException, BadRequestException, UsePipes, ValidationPipe, HttpCode, HttpStatus } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { UserRole } from '@prisma/client';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ResidencesService } from './residences.service';
 import { CreateResidenceDto } from './dto/create-residence.dto';
@@ -35,22 +36,26 @@ export class ResidencesController {
   @ApiResponse({ status: 401, description: 'Non autorisé' })
   @ApiResponse({ status: 404, description: 'Propriétaire spécifié non trouvé (admin uniquement)' })
   async create(@Body() createResidenceDto: CreateResidenceDto, @Request() req) {
-    // Si l'utilisateur est admin et a spécifié un proprietaireId, l'utiliser
-    // Sinon, utiliser l'utilisateur connecté comme propriétaire
+    // Seul un admin peut désigner le propriétaire (proprietaireId) ; pour tout autre rôle,
+    // proprietaireId est ignoré et le propriétaire est l'utilisateur connecté.
     let ownerId = req.user.id;
-    
+
     if (req.user.role === 'ADMIN' && createResidenceDto.proprietaireId) {
-      // Vérifier que le propriétaire spécifié existe
+      // Vérifier que le propriétaire spécifié existe et a bien le rôle PROPRIETAIRE
       const owner = await this.prisma.user.findUnique({
         where: { id: createResidenceDto.proprietaireId },
         select: { id: true, role: true },
       });
-      
+
       if (!owner) {
         throw new NotFoundException('Propriétaire spécifié non trouvé');
       }
-      
-      ownerId = createResidenceDto.proprietaireId;
+
+      if (owner.role !== UserRole.PROPRIETAIRE) {
+        throw new BadRequestException("L'utilisateur spécifié n'a pas le rôle PROPRIETAIRE");
+      }
+
+      ownerId = owner.id;
     }
     
     return this.residencesService.create(createResidenceDto, ownerId);
