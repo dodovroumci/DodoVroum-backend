@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient, Residence, User, Vehicle } from '@prisma/client';
+import { BookingStatus, Prisma, PrismaClient, Residence, User, Vehicle } from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
@@ -270,6 +270,78 @@ export class TestUtils {
     } finally {
       await prisma.$disconnect();
     }
+  }
+
+  /**
+   * Préparations hors API pour les fichiers e2e (connexion vérifiée, comme seedTestData).
+   * Chacune n'agit que sur les données du fichier : propriétaire et clients créés par seedTestData.
+   */
+  private static async withTestDatabase<T>(work: (prisma: PrismaClient) => Promise<T>): Promise<T> {
+    const prisma = await this.connectToTestDatabase();
+    try {
+      return await work(prisma);
+    } finally {
+      await prisma.$disconnect();
+    }
+  }
+
+  private static async assertOwnResidence(prisma: PrismaClient, data: TestData, residenceId: string): Promise<void> {
+    const owned = await prisma.residence.count({ where: { id: residenceId, ownerId: data.ownerUser.id } });
+    if (owned !== 1) throw new Error('Préparation refusée : résidence hors du fichier de test.');
+  }
+
+  /** Résidence supplémentaire du propriétaire du fichier ; ownerId est toujours celui du fichier. */
+  static async createResidence(
+    data: TestData,
+    fields: Omit<Prisma.ResidenceUncheckedCreateInput, 'ownerId'>,
+  ): Promise<Residence> {
+    return this.withTestDatabase((prisma) =>
+      prisma.residence.create({ data: { ...fields, ownerId: data.ownerUser.id } }),
+    );
+  }
+
+  /** Séjour passé et terminé du client du fichier, avec son avis. */
+  static async addCompletedStayReview(data: TestData, residenceId: string, rating: number, comment: string): Promise<void> {
+    await this.withTestDatabase(async (prisma) => {
+      await this.assertOwnResidence(prisma, data, residenceId);
+      const booking = await prisma.booking.create({
+        data: {
+          residenceId,
+          userId: data.clientUser.id,
+          startDate: new Date('2025-01-01'),
+          endDate: new Date('2025-01-03'),
+          totalPrice: 0,
+          status: BookingStatus.COMPLETED,
+        },
+      });
+      await prisma.review.create({ data: { residenceId, userId: data.clientUser.id, bookingId: booking.id, rating, comment } });
+    });
+  }
+
+  /** Statut et date de création d'une réservation du fichier (transitions et écoulement du temps hors API). */
+  static async setBookingState(
+    data: TestData,
+    bookingId: string,
+    state: { status: BookingStatus; createdAt?: Date },
+  ): Promise<void> {
+    const userIds = [data.clientUser.id, data.otherClientUser.id];
+    const { count } = await this.withTestDatabase((prisma) =>
+      prisma.booking.updateMany({ where: { id: bookingId, userId: { in: userIds } }, data: state }),
+    );
+    if (count !== 1) throw new Error('Préparation refusée : réservation hors du fichier de test.');
+  }
+
+  /** Dates bloquées manuellement sur une résidence du fichier. */
+  static async blockResidenceDates(data: TestData, residenceId: string, startDate: Date, endDate: Date): Promise<void> {
+    await this.withTestDatabase(async (prisma) => {
+      await this.assertOwnResidence(prisma, data, residenceId);
+      await prisma.blockedDate.create({ data: { residenceId, startDate, endDate } });
+    });
+  }
+
+  /** État du compte du propriétaire du fichier (désactivation, suppression logique, rétablissement). */
+  static async setOwnerAccountState(data: TestData, state: { isActive: boolean; deletedAt: Date | null }): Promise<void> {
+    await this.withTestDatabase((prisma) => prisma.user.update({ where: { id: data.ownerUser.id }, data: state }));
   }
 
   /** Date ISO à `days` jours d'aujourd'hui (négatif : passé). Les réservations exigent des dates futures. */
