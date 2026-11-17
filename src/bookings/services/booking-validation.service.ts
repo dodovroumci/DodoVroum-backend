@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
-import { BookingStatus, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { differenceInCalendarDays } from 'date-fns';
 import { PrismaService, PrismaTxClient } from '../../common/prisma/prisma.service';
 import { Prisma as PrismaTypes } from '@prisma/client';
@@ -20,12 +20,10 @@ import {
   isWithinDateRange,
   formatDateFR,
 } from '../../common/utils/date-overlap.util';
+import { buildBlockingBookingWhere, residenceBookingScope } from '../booking-blocking.rule';
 
 @Injectable()
 export class BookingValidationService {
-  /** Fenêtre pendant laquelle un booking `PENDING` (paiement en cours) bloque le créneau. */
-  private static readonly PAYMENT_HOLD_MS = 15 * 60 * 1000;
-
   constructor(private prisma: PrismaService) {}
 
   async validateBooking(createBookingDto: CreateBookingDto): Promise<void> {
@@ -124,39 +122,8 @@ export class BookingValidationService {
     endDate: string,
     excludeBookingId?: string,
   ): Prisma.BookingWhereInput {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const pendingSince = new Date(Date.now() - BookingValidationService.PAYMENT_HOLD_MS);
-
-    const alwaysBlock: BookingStatus[] = [
-      BookingStatus.PAID,
-      BookingStatus.CONFIRMED,
-      BookingStatus.CONFIRMEE,
-      BookingStatus.CHECKIN_CLIENT,
-      BookingStatus.CHECKIN_PROPRIO,
-      BookingStatus.EN_COURS_SEJOUR,
-      BookingStatus.ONGOING,
-    ];
-
-    return {
-      ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
-      AND: [
-        // Filtre statut : fermes toujours bloquants, PENDING seulement dans la fenêtre de paiement
-        {
-          OR: [
-            { status: { in: alwaysBlock } },
-            {
-              AND: [
-                { status: { in: [BookingStatus.PENDING, BookingStatus.AWAITING_PAYMENT] } },
-                { createdAt: { gte: pendingSince } },
-              ],
-            },
-          ],
-        },
-        // Filtre dates : chevauchement avec [start, end[
-        buildDateOverlapCondition(start, end),
-      ],
-    };
+    // Règle partagée avec les lectures de disponibilité (booking-blocking.rule.ts).
+    return buildBlockingBookingWhere(new Date(startDate), new Date(endDate), new Date(), excludeBookingId);
   }
 
   /**
@@ -306,7 +273,7 @@ export class BookingValidationService {
     // Vérifier les conflits de réservation (résidence directe ou pack / offre sur cette résidence)
     const conflictingBooking = await this.prisma.booking.findFirst({
       where: {
-        OR: [{ residenceId }, { offer: { residenceId } }],
+        ...residenceBookingScope(residenceId),
         ...this.buildOverlapWhere(startDate, endDate, excludeBookingId),
       },
     });
