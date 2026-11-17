@@ -50,8 +50,21 @@ export const PUBLIC_CURRENCY = 'XOF';
 /** Origine canonique des pages résidence (Android App Links : hôte sans www). */
 export const CANONICAL_ORIGIN = 'https://dodovroum.com';
 
-/** Seul stockage d'images accepté (même base que ResidencesService.parseImages). */
-export const IMAGE_STORAGE_ORIGIN = 'https://dodovroum.com';
+/**
+ * Origine qui sert réellement les fichiers (nginx du VPS) : toutes les URL d'images
+ * renvoyées sont construites sur elle. dodovroum.com est le site statique : /storage
+ * y répond 404.
+ */
+export const IMAGE_PUBLIC_ORIGIN = 'https://api.dodovroum.com';
+
+/**
+ * Origines acceptées dans les URL enregistrées en base : dodovroum.com (écrite par
+ * l'upload et ResidencesService.parseImages) et l'origine réelle. Tout autre hôte est refusé.
+ */
+export const IMAGE_STORED_ORIGINS: ReadonlySet<string> = new Set([
+  'https://dodovroum.com',
+  IMAGE_PUBLIC_ORIGIN,
+]);
 export const IMAGE_STORAGE_PATH = '/storage/residences/';
 
 /** Image de remplacement de parseImages : ce n'est pas une photo du logement. */
@@ -115,9 +128,10 @@ function parseJsonArray(value: unknown): unknown[] {
 
 /**
  * URL publique d'une image si elle désigne un fichier du stockage DodoVroum, sinon null.
- * - URL absolue : uniquement https://dodovroum.com/storage/residences/<fichier>
+ * - URL absolue : uniquement <origine de IMAGE_STORED_ORIGINS>/storage/residences/<fichier>
  *   (pas d'autre hôte, pas de http, pas de port, d'identifiants, de requête ni de sous-dossier) ;
  * - chemin relatif : son nom de fichier, rattaché au stockage, comme le fait parseImages.
+ * L'URL renvoyée est toujours reconstruite sur IMAGE_PUBLIC_ORIGIN.
  */
 export function toStorageImageUrl(entry: unknown): string | null {
   if (typeof entry !== 'string') return null;
@@ -133,7 +147,7 @@ export function toStorageImageUrl(entry: unknown): string | null {
       return null;
     }
     if (
-      url.origin !== IMAGE_STORAGE_ORIGIN ||
+      !IMAGE_STORED_ORIGINS.has(url.origin) ||
       url.username ||
       url.password ||
       url.search ||
@@ -152,7 +166,7 @@ export function toStorageImageUrl(entry: unknown): string | null {
     fileName.toLowerCase() === PLACEHOLDER_IMAGE
   )
     return null;
-  return `${IMAGE_STORAGE_ORIGIN}${IMAGE_STORAGE_PATH}${fileName}`;
+  return `${IMAGE_PUBLIC_ORIGIN}${IMAGE_STORAGE_PATH}${fileName}`;
 }
 
 export function toPublicImages(images: unknown): string[] {

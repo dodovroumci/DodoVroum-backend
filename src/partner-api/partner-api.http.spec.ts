@@ -347,8 +347,8 @@ describe('API publique et partenaire des résidences (HTTP)', () => {
       expect(response.body.data).toMatchObject({
         id: 'res-ok',
         pricePerNight: { amount: 45000, currency: 'XOF' },
-        images: ['https://dodovroum.com/storage/residences/villa.jpg'],
-        coverImageUrl: 'https://dodovroum.com/storage/residences/villa.jpg',
+        images: ['https://api.dodovroum.com/storage/residences/villa.jpg'],
+        coverImageUrl: 'https://api.dodovroum.com/storage/residences/villa.jpg',
         amenities: ['WiFi', 'Piscine'],
         rating: { average: 4.5, count: 2 },
         url: 'https://dodovroum.com/r/res-ok',

@@ -85,8 +85,9 @@ describe('API publique et partenaire des résidences (e2e)', () => {
         id: visibleId,
         city,
         pricePerNight: { amount: 30000, currency: 'XOF' },
-        coverImageUrl: 'https://dodovroum.com/storage/residences/photo1.jpg',
-        images: ['https://dodovroum.com/storage/residences/photo1.jpg'],
+        coverImageUrl:
+          'https://api.dodovroum.com/storage/residences/photo1.jpg',
+        images: ['https://api.dodovroum.com/storage/residences/photo1.jpg'],
         amenities: ['WiFi', 'Piscine'],
         rating: { average: 4, count: 1 },
         url: `https://dodovroum.com/r/${visibleId}`,
