@@ -578,7 +578,7 @@ export class BookingsService {
         },
         select: { id: true },
       });
-      if (!hasAccess) throw new BadRequestException('Accès refusé');
+      if (!hasAccess) throw new ForbiddenException('Accès refusé');
     }
 
     // Accès validé : hors client de la réservation, c'est l'admin ou le propriétaire du bien.

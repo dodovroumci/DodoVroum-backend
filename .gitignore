@@ -9,6 +9,7 @@ yarn-error.log*
 .env.local
 .env.development.local
 .env.test.local
+.env.test
 .env.production.local
 
 # Build outputs
@@ -47,6 +48,10 @@ uploads/
 .env
 *.save
 *.sql
+# Exceptions : les migrations Prisma et le contrôle de schéma (lecture seule) doivent être versionnés.
+# Ne jamais élargir ces exceptions : les autres fichiers .sql (dumps) peuvent contenir des données.
+!prisma/migrations/*/migration.sql
+!prisma/reconcile-schema-drift.verify.sql
 storage/
 public/
 tables_list.txt

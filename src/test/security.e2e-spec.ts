@@ -1,34 +1,36 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
-import { AppModule } from '../app.module';
-import { TestUtils } from '../test/test-utils';
+import { TEST_PASSWORD, TestData, TestUtils } from '../test/test-utils';
 
 describe('Security Tests (e2e)', () => {
   let app: INestApplication;
-  let testData: any;
+  let testData: TestData;
+  // Une seule connexion par compte : la limite de connexion (IP + email) ne doit pas fausser les autres tests.
+  let clientToken: string;
 
   beforeAll(async () => {
     app = await TestUtils.createTestApp();
     testData = await TestUtils.seedTestData();
+    clientToken = await TestUtils.getAuthToken(app, testData.clientUser.email);
   });
 
   afterAll(async () => {
-    await TestUtils.cleanupDatabase();
-    await TestUtils.closeTestApp(app);
+    if (testData) await TestUtils.cleanupTestData(testData);
+    if (app) await TestUtils.closeTestApp(app);
   });
 
   describe('Rate Limiting', () => {
     it('should limit login attempts', async () => {
+      // Compte dédié : la limite (IP + email) ne doit pas bloquer les connexions des autres tests.
       const loginData = {
-        email: 'client@test.com',
+        email: testData.email('rate-limit-login'),
         password: 'wrongpassword',
       };
 
       // Make multiple failed login attempts
       for (let i = 0; i < 6; i++) {
         const response = await request(app.getHttpServer())
-          .post('/auth/login')
+          .post('/api/auth/login')
           .send(loginData);
 
         if (i < 5) {
@@ -40,43 +42,43 @@ describe('Security Tests (e2e)', () => {
       }
     });
 
-    it('should limit registration attempts', async () => {
+    it('should limit registration attempts per IP + email', async () => {
+      // Politique actuelle (AuthThrottlerGuard) : 3 tentatives par IP + email sur 5 minutes.
+      // Il n'existe pas de limite par IP seule sur l'inscription (décision de conception en attente).
       const registerData = {
-        email: 'test@example.com',
-        password: 'password123',
+        email: testData.email('register-limit'),
+        password: TEST_PASSWORD,
         firstName: 'Test',
         lastName: 'User',
       };
 
-      // Make multiple registration attempts
+      const responses: request.Response[] = [];
       for (let i = 0; i < 4; i++) {
-        const response = await request(app.getHttpServer())
-          .post('/auth/register')
-          .send({
-            ...registerData,
-            email: `test${i}@example.com`,
-          });
-
-        if (i < 3) {
-          expect([201, 400]).toContain(response.status);
-        } else {
-          // 4th attempt should be rate limited
-          expect(response.status).toBe(429);
-        }
+        responses.push(await request(app.getHttpServer()).post('/api/auth/register').send(registerData));
       }
+
+      // 1re : créé ; 2e et 3e : email déjà utilisé ; 4e : bloquée avant tout traitement.
+      expect(responses.map((response) => response.status)).toEqual([201, 400, 400, 429]);
+      expect(responses[3].headers['retry-after']).toBeDefined();
+
+      // Le compteur est propre à l'email : un autre email depuis la même IP n'est pas bloqué.
+      await request(app.getHttpServer())
+        .post('/api/auth/register')
+        .send({ ...registerData, email: testData.email('register-limit-other') })
+        .expect(201);
     });
   });
 
   describe('Authentication Security', () => {
     it('should reject requests without proper authorization header', async () => {
       await request(app.getHttpServer())
-        .get('/bookings/my-bookings')
+        .get('/api/bookings/my-bookings')
         .expect(401);
     });
 
     it('should reject requests with malformed authorization header', async () => {
       await request(app.getHttpServer())
-        .get('/bookings/my-bookings')
+        .get('/api/bookings/my-bookings')
         .set('Authorization', 'InvalidToken')
         .expect(401);
     });
@@ -85,7 +87,7 @@ describe('Security Tests (e2e)', () => {
       const expiredToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
 
       await request(app.getHttpServer())
-        .get('/bookings/my-bookings')
+        .get('/api/bookings/my-bookings')
         .set('Authorization', `Bearer ${expiredToken}`)
         .expect(401);
     });
@@ -95,47 +97,57 @@ describe('Security Tests (e2e)', () => {
     it('should prevent SQL injection in email field', async () => {
       const maliciousData = {
         email: "'; DROP TABLE users; --",
-        password: 'password123',
+        password: TEST_PASSWORD,
         firstName: 'Test',
         lastName: 'User',
       };
 
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/auth/register')
         .send(maliciousData);
 
       // Should fail validation, not execute SQL
       expect(response.status).toBe(400);
     });
 
-    it('should prevent XSS in text fields', async () => {
-      const maliciousData = {
-        email: 'test@example.com',
-        password: 'password123',
-        firstName: '<script>alert("xss")</script>',
-        lastName: 'User',
-      };
+    it('should treat HTML in text fields as plain data returned only as JSON', async () => {
+      // L'API ne produit aucun rendu HTML : elle conserve la chaîne telle quelle et la renvoie en JSON.
+      // La protection contre le XSS relève de l'échappement à l'affichage (dashboard Vue, e-mails,
+      // application) : ce test ne garantit rien sur le rendu des interfaces.
+      const htmlPayload = '<script>alert("xss")</script>';
 
-      const response = await request(app.getHttpServer())
-        .post('/auth/register')
-        .send(maliciousData);
+      const registerResponse = await request(app.getHttpServer())
+        .post('/api/auth/register')
+        .send({
+          email: testData.email('xss'),
+          password: TEST_PASSWORD,
+          firstName: htmlPayload,
+          lastName: 'User',
+        })
+        .expect(201);
 
-      // Should fail validation
-      expect(response.status).toBe(400);
+      expect(registerResponse.headers['content-type']).toMatch(/^application\/json/);
+      expect(registerResponse.body.user.firstName).toBe(htmlPayload);
+
+      const meResponse = await request(app.getHttpServer())
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${registerResponse.body.access_token}`)
+        .expect(200);
+
+      expect(meResponse.headers['content-type']).toMatch(/^application\/json/);
+      expect(meResponse.body.firstName).toBe(htmlPayload);
     });
 
     it('should prevent NoSQL injection', async () => {
       const maliciousData = {
-        startDate: '2024-07-01T00:00:00Z',
-        endDate: '2024-07-07T23:59:59Z',
+        startDate: TestUtils.dateInDays(30),
+        endDate: TestUtils.dateInDays(36),
         residenceId: { $ne: null }, // NoSQL injection attempt
       };
 
-      const authToken = await TestUtils.getAuthToken(app, 'client@test.com', 'password123');
-
       const response = await request(app.getHttpServer())
-        .post('/bookings')
-        .set('Authorization', `Bearer ${authToken}`)
+        .post('/api/bookings')
+        .set('Authorization', `Bearer ${clientToken}`)
         .send(maliciousData);
 
       // Should fail validation
@@ -144,25 +156,22 @@ describe('Security Tests (e2e)', () => {
   });
 
   describe('Authorization Security', () => {
-    let clientToken: string;
     let adminToken: string;
 
     beforeAll(async () => {
-      clientToken = await TestUtils.getAuthToken(app, 'client@test.com', 'password123');
-      adminToken = await TestUtils.getAuthToken(app, 'admin@test.com', 'password123');
+      adminToken = await TestUtils.getAuthToken(app, testData.adminUser.email);
     });
 
     it('should prevent clients from accessing admin-only endpoints', async () => {
-      // Assuming there's an admin-only endpoint
       await request(app.getHttpServer())
-        .get('/users') // Admin endpoint
+        .get('/api/users') // Admin endpoint
         .set('Authorization', `Bearer ${clientToken}`)
         .expect(403); // Forbidden
     });
 
     it('should allow admins to access admin-only endpoints', async () => {
       await request(app.getHttpServer())
-        .get('/users') // Admin endpoint
+        .get('/api/users') // Admin endpoint
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
     });
@@ -170,28 +179,29 @@ describe('Security Tests (e2e)', () => {
     it('should prevent users from accessing other users data', async () => {
       // Create a booking for client user
       const bookingData = {
-        startDate: '2024-09-01T00:00:00Z',
-        endDate: '2024-09-07T23:59:59Z',
+        startDate: TestUtils.dateInDays(70),
+        endDate: TestUtils.dateInDays(76),
         residenceId: testData.testResidence.id,
       };
 
       const bookingResponse = await request(app.getHttpServer())
-        .post('/bookings')
+        .post('/api/bookings')
         .set('Authorization', `Bearer ${clientToken}`)
-        .send(bookingData);
+        .send(bookingData)
+        .expect(201);
 
-      const bookingId = bookingResponse.body.data.id;
+      const bookingId = bookingResponse.body.id;
 
       // Try to access with admin token (should work for admin)
       await request(app.getHttpServer())
-        .get(`/bookings/${bookingId}`)
+        .get(`/api/bookings/${bookingId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
       // Try to access with different client token (should fail)
-      const anotherClientToken = await TestUtils.getAuthToken(app, 'newuser@test.com', 'password123');
+      const anotherClientToken = await TestUtils.getAuthToken(app, testData.otherClientUser.email);
       await request(app.getHttpServer())
-        .get(`/bookings/${bookingId}`)
+        .get(`/api/bookings/${bookingId}`)
         .set('Authorization', `Bearer ${anotherClientToken}`)
         .expect(403);
     });
@@ -199,26 +209,26 @@ describe('Security Tests (e2e)', () => {
 
   describe('Data Exposure Security', () => {
     it('should not expose sensitive user data in responses', async () => {
-      const authToken = await TestUtils.getAuthToken(app, 'client@test.com', 'password123');
+      await request(app.getHttpServer())
+        .post('/api/bookings')
+        .set('Authorization', `Bearer ${clientToken}`)
+        .send({ startDate: TestUtils.dateInDays(80), endDate: TestUtils.dateInDays(86), residenceId: testData.testResidence.id })
+        .expect(201);
 
       const response = await request(app.getHttpServer())
-        .get('/bookings/my-bookings')
-        .set('Authorization', `Bearer ${authToken}`)
+        .get('/api/bookings/my-bookings')
+        .set('Authorization', `Bearer ${clientToken}`)
         .expect(200);
 
-      // Check that password is not exposed
-      if (response.body.data.length > 0) {
-        const booking = response.body.data[0];
-        if (booking.user) {
-          expect(booking.user).not.toHaveProperty('password');
-        }
-      }
+      // Aucun secret de compte, à aucun niveau de la réponse.
+      expect(response.body.length).toBeGreaterThan(0);
+      expect(JSON.stringify(response.body)).not.toMatch(/"(password|refreshTokenHash|resetPasswordToken)"/);
     });
 
     it('should not expose internal database IDs in error messages', async () => {
       const response = await request(app.getHttpServer())
-        .get('/bookings/non-existent-id')
-        .set('Authorization', `Bearer ${await TestUtils.getAuthToken(app, 'client@test.com', 'password123')}`)
+        .get('/api/bookings/non-existent-id')
+        .set('Authorization', `Bearer ${clientToken}`)
         .expect(404);
 
       // Error message should not contain internal details
