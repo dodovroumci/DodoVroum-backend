@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { safeOwnerSelect, safePublicUserSelect } from '../common/prisma/safe-selects';
+import { safeOwnerSelect, safePublicUserSelect, publicBlockedDateSelect } from '../common/prisma/safe-selects';
 import { PaginationService, PaginationOptions, PaginationResult } from '../common/services/pagination.service';
 import { CacheService } from '../cache/cache.service';
 import { AppLoggerService } from '../logging/app-logger.service';
@@ -433,7 +433,11 @@ export class ResidencesService {
   }
 
   async getBlockedDates(residenceId: string) {
-    return this.prisma.blockedDate.findMany({ where: { residenceId }, orderBy: { startDate: 'asc' } });
+    return this.prisma.blockedDate.findMany({
+      where: { residenceId },
+      select: publicBlockedDateSelect,
+      orderBy: { startDate: 'asc' },
+    });
   }
 
   async unblockDates(residenceId: string, blockedDateId: string) {

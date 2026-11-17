@@ -13,14 +13,17 @@ import {
   Delete,
   UseGuards,
   Request,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { UserRole } from '@prisma/client';
 import { BookingsService } from './bookings.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { UpdateBookingDatesDto } from './dto/update-booking-dates.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BookingOwnerOrAdminGuard } from './guards/booking-owner-or-admin.guard';
+import { AdminGuard } from '../admin/guards/admin.guard';
 import { CreateBookingDto } from './dto/create-booking.dto';
 
 @ApiTags('reservations')
@@ -119,9 +122,22 @@ export class ReservationsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Obtenir toutes les réservations' })
-  findAll() {
-    return this.bookingsService.findAll();
+  @ApiOperation({ summary: 'Obtenir les réservations (scopées par rôle)' })
+  @ApiResponse({ status: 403, description: 'Rôle non autorisé' })
+  findAll(@Request() req) {
+    // Même périmètre que GET /bookings ; l'admin garde la réponse actuelle (sans finance).
+    // Tout autre rôle est refusé : aucun accès par défaut.
+    const { id, role } = req.user;
+    switch (role) {
+      case UserRole.ADMIN:
+        return this.bookingsService.findAll();
+      case UserRole.PROPRIETAIRE:
+        return this.bookingsService.findByOwner(id);
+      case UserRole.CLIENT:
+        return this.bookingsService.findByUser(id);
+      default:
+        throw new ForbiddenException('Accès refusé');
+    }
   }
 
   @Get('my-reservations')
@@ -155,7 +171,9 @@ export class ReservationsController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Supprimer une réservation' })
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Supprimer une réservation (admin uniquement)' })
+  @ApiResponse({ status: 403, description: 'Réservé aux administrateurs' })
   remove(@Param('id') id: string) {
     return this.bookingsService.remove(id);
   }
