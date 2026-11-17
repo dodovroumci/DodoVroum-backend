@@ -1,6 +1,6 @@
 {
   "moduleFileExtensions": ["js", "json", "ts"],
-  "rootDir": "src",
+  "rootDir": "../src",
   "testEnvironment": "node",
   "testRegex": ".*\\.e2e-spec\\.ts$",
   "transform": {
@@ -11,8 +11,9 @@
   ],
   "coverageDirectory": "../coverage",
   "testTimeout": 30000,
-  "setupFilesAfterEnv": ["<rootDir>/test/setup.ts"],
-  "moduleNameMapping": {
-    "^@/(.*)$": "<rootDir>/$1"
+  "setupFilesAfterEnv": ["<rootDir>/test/setup-e2e.ts"],
+  "moduleNameMapper": {
+    "^@/(.*)$": "<rootDir>/$1",
+    "^uuid$": "<rootDir>/test/uuid-jest-shim.ts"
   }
 }

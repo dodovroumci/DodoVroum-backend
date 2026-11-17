@@ -7,7 +7,7 @@ import {
   ForbiddenException
 } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { safeOwnerSelect } from '../common/prisma/safe-selects';
+import { safeOwnerSelect, publicBlockedDateSelect } from '../common/prisma/safe-selects';
 import { VehiclesQueryDto } from './dto/vehicles-query.dto';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { VehicleType, Prisma, BookingStatus, ListingModerationStatus } from '@prisma/client';
@@ -349,7 +349,11 @@ export class VehiclesService {
   }
 
   async getBlockedDates(vehicleId: string) {
-    return this.prisma.blockedDate.findMany({ where: { vehicleId }, orderBy: { startDate: 'asc' } });
+    return this.prisma.blockedDate.findMany({
+      where: { vehicleId },
+      select: publicBlockedDateSelect,
+      orderBy: { startDate: 'asc' },
+    });
   }
 
   async unblockDates(vehicleId: string, blockedDateId: string) {

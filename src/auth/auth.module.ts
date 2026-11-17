@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
@@ -9,6 +9,7 @@ import { LocalStrategy } from './strategies/local.strategy';
 import { AuthThrottlerGuard } from './guards/auth-throttler.guard';
 import { UsersModule } from '../users/users.module';
 import { MailModule } from '../mail/mail.module';
+import { loadLoginThrottleConfig } from './auth-throttle.config';
 
 @Module({
   imports: [
@@ -29,4 +30,9 @@ import { MailModule } from '../mail/mail.module';
   providers: [AuthService, JwtStrategy, LocalStrategy, AuthThrottlerGuard],
   exports: [AuthService],
 })
-export class AuthModule {}
+export class AuthModule implements OnModuleInit {
+  onModuleInit() {
+    // Refus de démarrage si AUTH_LOGIN_LIMIT / AUTH_LOGIN_WINDOW_SECONDS sont invalides.
+    loadLoginThrottleConfig(process.env);
+  }
+}

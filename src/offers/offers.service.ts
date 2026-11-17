@@ -581,18 +581,25 @@ export class OffersService {
   async update(id: string, updateOfferDto: UpdateOfferDto) {
     const existingOffer = await this.prisma.offer.findUnique({
       where: { id },
-      select: { residenceId: true, vehicleId: true },
+      select: { residenceId: true, vehicleId: true, ownerId: true },
     });
 
     if (!existingOffer) {
       throw new NotFoundException('Offre non trouvée');
     }
 
-    // Si residenceId ou vehicleId sont modifiés, vérifier qu'ils appartiennent au même propriétaire
+    // Si residenceId ou vehicleId sont modifiés, la résidence ET le véhicule (y compris celui
+    // qui ne change pas) doivent appartenir au propriétaire de l'offre — admin compris.
     const residenceId = updateOfferDto.residenceId || existingOffer.residenceId;
     const vehicleId = updateOfferDto.vehicleId || existingOffer.vehicleId;
 
     if (updateOfferDto.residenceId || updateOfferDto.vehicleId) {
+      if (!existingOffer.ownerId) {
+        throw new BadRequestException(
+          'Cette offre n\'a pas de propriétaire : ses biens ne peuvent pas être modifiés'
+        );
+      }
+
       // Vérifier que la résidence existe
       const residence = await this.prisma.residence.findUnique({
         where: { id: residenceId },
@@ -629,10 +636,10 @@ export class OffersService {
         throw new BadRequestException('Le véhicule doit avoir un propriétaire');
       }
 
-      // Vérifier que la résidence et le véhicule appartiennent au même propriétaire
-      if (residence.ownerId !== vehicle.ownerId) {
+      // Vérifier que la résidence et le véhicule appartiennent au propriétaire de l'offre
+      if (residence.ownerId !== existingOffer.ownerId || vehicle.ownerId !== existingOffer.ownerId) {
         throw new BadRequestException(
-          'Le véhicule et la résidence doivent appartenir au même propriétaire'
+          'Le véhicule et la résidence doivent appartenir au propriétaire de l\'offre'
         );
       }
 
@@ -660,9 +667,12 @@ export class OffersService {
       }
     }
 
+    // ownerId n'est jamais modifiable par cette route (absent du DTO ; écarté ici par sécurité)
+    const { ownerId: _ignoredOwnerId, ...data } = updateOfferDto as UpdateOfferDto & { ownerId?: string };
+
     const updated = await this.prisma.offer.update({
       where: { id },
-      data: updateOfferDto,
+      data,
       include: {
         owner: {
           select: safeOwnerSelect,

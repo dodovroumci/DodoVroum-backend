@@ -1,12 +1,10 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
-import { AppModule } from '../app.module';
-import { TestUtils } from '../test/test-utils';
+import { TEST_PASSWORD, TestData, TestUtils } from '../test/test-utils';
 
 describe('AuthController (e2e)', () => {
   let app: INestApplication;
-  let testData: any;
+  let testData: TestData;
 
   beforeAll(async () => {
     app = await TestUtils.createTestApp();
@@ -14,141 +12,141 @@ describe('AuthController (e2e)', () => {
   });
 
   afterAll(async () => {
-    await TestUtils.cleanupDatabase();
-    await TestUtils.closeTestApp(app);
+    if (testData) await TestUtils.cleanupTestData(testData);
+    if (app) await TestUtils.closeTestApp(app);
   });
 
-  describe('/auth/register (POST)', () => {
+  describe('/api/auth/register (POST)', () => {
     it('should register a new user successfully', async () => {
       const registerData = {
-        email: 'newuser@test.com',
-        password: 'password123',
+        email: testData.email('newuser'),
+        password: TEST_PASSWORD,
         firstName: 'New',
         lastName: 'User',
         phone: '+1234567890',
       };
 
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/auth/register')
         .send(registerData)
         .expect(201);
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveProperty('access_token');
-      expect(response.body.data).toHaveProperty('refresh_token');
-      expect(response.body.data.user.email).toBe(registerData.email);
+      expect(response.body).toHaveProperty('access_token');
+      expect(response.body).toHaveProperty('refresh_token');
+      expect(response.body.user.email).toBe(registerData.email);
+      expect(response.body.user).not.toHaveProperty('password');
     });
 
     it('should fail with invalid email', async () => {
       const registerData = {
         email: 'invalid-email',
-        password: 'password123',
+        password: TEST_PASSWORD,
         firstName: 'Test',
         lastName: 'User',
       };
 
       await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/auth/register')
         .send(registerData)
         .expect(400);
     });
 
     it('should fail with short password', async () => {
       const registerData = {
-        email: 'test@example.com',
+        email: testData.email('short-password'),
         password: '123',
         firstName: 'Test',
         lastName: 'User',
       };
 
       await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/auth/register')
         .send(registerData)
         .expect(400);
     });
 
     it('should fail when user already exists', async () => {
       const registerData = {
-        email: 'client@test.com', // Already exists in test data
-        password: 'password123',
+        email: testData.clientUser.email, // Already exists in test data
+        password: TEST_PASSWORD,
         firstName: 'Test',
         lastName: 'User',
       };
 
       await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/auth/register')
         .send(registerData)
         .expect(400);
     });
   });
 
-  describe('/auth/login (POST)', () => {
+  describe('/api/auth/login (POST)', () => {
     it('should login successfully with valid credentials', async () => {
       const loginData = {
-        email: 'client@test.com',
-        password: 'password123',
+        email: testData.clientUser.email,
+        password: TEST_PASSWORD,
       };
 
       const response = await request(app.getHttpServer())
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send(loginData)
         .expect(200);
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveProperty('access_token');
-      expect(response.body.data).toHaveProperty('refresh_token');
-      expect(response.body.data.user.email).toBe(loginData.email);
+      expect(response.body).toHaveProperty('access_token');
+      expect(response.body).toHaveProperty('refresh_token');
+      expect(response.body.user.email).toBe(loginData.email);
+      expect(response.body.user).not.toHaveProperty('password');
     });
 
     it('should fail with invalid credentials', async () => {
       const loginData = {
-        email: 'client@test.com',
+        email: testData.clientUser.email,
         password: 'wrongpassword',
       };
 
       await request(app.getHttpServer())
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send(loginData)
         .expect(401);
     });
 
     it('should fail with non-existent user', async () => {
       const loginData = {
-        email: 'nonexistent@test.com',
-        password: 'password123',
+        email: testData.email('nonexistent'),
+        password: TEST_PASSWORD,
       };
 
       await request(app.getHttpServer())
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send(loginData)
         .expect(401);
     });
   });
 
-  describe('/auth/refresh (POST)', () => {
+  describe('/api/auth/refresh (POST)', () => {
     it('should refresh token successfully', async () => {
       // First login to get refresh token
       const loginResponse = await request(app.getHttpServer())
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({
-          email: 'client@test.com',
-          password: 'password123',
-        });
+          email: testData.clientUser.email,
+          password: TEST_PASSWORD,
+        })
+        .expect(200);
 
-      const refreshToken = loginResponse.body.data.refresh_token;
+      const refreshToken = loginResponse.body.refresh_token;
 
       const response = await request(app.getHttpServer())
-        .post('/auth/refresh')
+        .post('/api/auth/refresh')
         .send({ refresh_token: refreshToken })
         .expect(200);
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveProperty('access_token');
+      expect(response.body).toHaveProperty('access_token');
     });
 
     it('should fail with invalid refresh token', async () => {
       await request(app.getHttpServer())
-        .post('/auth/refresh')
+        .post('/api/auth/refresh')
         .send({ refresh_token: 'invalid-token' })
         .expect(401);
     });

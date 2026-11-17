@@ -93,6 +93,17 @@ export const safeVehicleSelect = {
   owner: { select: safeOwnerSelect },
 } as const;
 
+/**
+ * Blocked date on public calendar endpoints (residence, vehicle).
+ * Excludes bookingId and reason (owner's private note). `id` is kept: the owner
+ * needs it to unblock a period through the owner-guarded DELETE route.
+ */
+export const publicBlockedDateSelect = {
+  id: true,
+  startDate: true,
+  endDate: true,
+} as const;
+
 /** Offer embedded in favorites. */
 export const safeOfferSelect = {
   id: true,

@@ -12,6 +12,15 @@ JWT_REFRESH_EXPIRES_IN="30d"
 # Configuration serveur
 PORT=3000
 NODE_ENV=development
+# Derrière nginx (production) : TRUST_PROXY=true, sinon toutes les requêtes semblent venir du proxy.
+# En local sans proxy, laisser la variable absente.
+# TRUST_PROXY=true
+
+# Limitation des connexions (/auth/login, /auth/login/client, /auth/login/proprio, compteur commun)
+# Tentatives réussies ou échouées par IP + e-mail, sur une fenêtre glissante en secondes.
+# Variable absente : valeur par défaut ci-dessous. Valeur invalide : l'API refuse de démarrer.
+AUTH_LOGIN_LIMIT=5
+AUTH_LOGIN_WINDOW_SECONDS=300
 
 # Upload de fichiers
 UPLOAD_PATH="./uploads"

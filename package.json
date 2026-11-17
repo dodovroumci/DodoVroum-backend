@@ -127,8 +127,9 @@
     "setupFilesAfterEnv": [
       "<rootDir>/test/setup.ts"
     ],
-    "moduleNameMapping": {
-      "^@/(.*)$": "<rootDir>/$1"
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/$1",
+      "^uuid$": "<rootDir>/test/uuid-jest-shim.ts"
     },
     "testTimeout": 10000
   },

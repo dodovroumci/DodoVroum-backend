@@ -5,6 +5,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { configureTrustProxy } from './common/http/trust-proxy';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -13,12 +14,7 @@ async function bootstrap() {
   });
 
   // Derrière nginx / load balancer : req.ip et X-Forwarded-For fiables pour la whitelist webhook
-  if (process.env.TRUST_PROXY === 'true' || process.env.TRUST_PROXY === '1') {
-    // 1 = un seul proxy de confiance (nginx) : req.ip = IP vue par nginx,
-    // pas la valeur la plus à gauche de X-Forwarded-For (falsifiable par le client).
-    app.set('trust proxy', 1);
-    logger.log('Trust proxy activé (TRUST_PROXY) — IP client fiable pour les webhooks');
-  }
+  configureTrustProxy(app, process.env, logger);
 
   // 1. Configuration CORS - Mise à jour pour inclure le Dashboard Local
   app.enableCors({
