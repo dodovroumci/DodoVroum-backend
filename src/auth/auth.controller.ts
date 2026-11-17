@@ -18,9 +18,9 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService, LoginResponse, RefreshResponse } from './auth.service';
-import { LocalAuthGuard } from './guards/local-auth.guard';
 import { AuthIpThrottle, AuthThrottlerGuard } from './guards/auth-throttler.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { LoginThrottle } from './decorators/login-throttle.decorator';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RegisterProprietaireDto } from './dto/register-proprietaire.dto';
@@ -42,8 +42,7 @@ export class AuthController {
 
   constructor(private authService: AuthService) {}
 
-  @UseGuards(LocalAuthGuard, AuthThrottlerGuard)
-  @Throttle({ default: { limit: 5, ttl: 300000 } })
+  @LoginThrottle()
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Connexion utilisateur' })
@@ -54,8 +53,7 @@ export class AuthController {
     return this.authService.login(req.user, loginDto.rememberMe ?? false);
   }
 
-  @UseGuards(LocalAuthGuard, AuthThrottlerGuard)
-  @Throttle({ default: { limit: 5, ttl: 300000 } })
+  @LoginThrottle()
   @Post('login/client')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Connexion utilisateur (application Client)' })
@@ -68,8 +66,7 @@ export class AuthController {
     return this.authService.login(req.user, loginDto.rememberMe ?? false);
   }
 
-  @UseGuards(LocalAuthGuard, AuthThrottlerGuard)
-  @Throttle({ default: { limit: 5, ttl: 300000 } })
+  @LoginThrottle()
   @Post('login/proprio')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Connexion utilisateur (application Propriétaire)' })
