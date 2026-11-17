@@ -10,7 +10,10 @@ import {
   toStorageImageUrl,
 } from './public-residence.serializer';
 
-const STORAGE = 'https://dodovroum.com/storage/residences';
+/** URL renvoyées : stockage réellement servi par l'API. */
+const STORAGE = 'https://api.dodovroum.com/storage/residences';
+/** URL telles qu'enregistrées en base par l'upload (dodovroum.com/storage répond 404). */
+const STORED = 'https://dodovroum.com/storage/residences';
 
 /** Ligne telle que la base pourrait la renvoyer si la sélection était contournée. */
 const fullRow = {
@@ -25,7 +28,7 @@ const fullRow = {
   bathrooms: 2,
   nombrePieces: 5,
   amenities: JSON.stringify(['WiFi', 'Piscine']),
-  images: JSON.stringify([`${STORAGE}/a.jpg`, 'b.png']),
+  images: JSON.stringify([`${STORED}/a.jpg`, 'b.png']),
   // Champs privés : ne doivent jamais traverser le sérialiseur.
   description: 'Appelez le 0700000000',
   address: '12 rue privée',
@@ -161,9 +164,28 @@ describe('Sérialiseur public des résidences', () => {
   });
 
   describe('images', () => {
+    it('origines enregistrées : dodovroum.com et api.dodovroum.com acceptées, sortie toujours sur api.dodovroum.com, autre hôte refusé', () => {
+      const file = 'dde5a11b-5837-4266-8e44-496710059f29.webp';
+      const expected = `https://api.dodovroum.com/storage/residences/${file}`;
+
+      expect(
+        toStorageImageUrl(`https://dodovroum.com/storage/residences/${file}`),
+      ).toBe(expected);
+      expect(
+        toStorageImageUrl(
+          `https://api.dodovroum.com/storage/residences/${file}`,
+        ),
+      ).toBe(expected);
+      expect(
+        toStorageImageUrl(`https://evil.example/storage/residences/${file}`),
+      ).toBeNull();
+    });
+
     it.each([
+      [`${STORED}/photo.jpg`, `${STORAGE}/photo.jpg`],
       [`${STORAGE}/photo.jpg`, `${STORAGE}/photo.jpg`],
       ['photo.webp', `${STORAGE}/photo.webp`],
+      ['/storage/residences/photo.jpg', `${STORAGE}/photo.jpg`],
       ['storage/residences/photo.PNG', `${STORAGE}/photo.PNG`],
     ])('accepte %s', (entry, expected) => {
       expect(toStorageImageUrl(entry)).toBe(expected);
@@ -191,6 +213,31 @@ describe('Sérialiseur public des résidences', () => {
       ['requête', 'https://dodovroum.com/storage/residences/photo.jpg?x=1'],
       ['autre dossier', 'https://dodovroum.com/uploads/photo.jpg'],
       ['sous-dossier', 'https://dodovroum.com/storage/residences/a/photo.jpg'],
+      [
+        'http (non chiffré) sur l’API',
+        'http://api.dodovroum.com/storage/residences/photo.jpg',
+      ],
+      [
+        'autre sous-domaine',
+        'https://cdn.dodovroum.com/storage/residences/photo.jpg',
+      ],
+      [
+        'hôte API usurpé',
+        'https://api.dodovroum.com.evil.example/storage/residences/photo.jpg',
+      ],
+      [
+        'port sur l’API',
+        'https://api.dodovroum.com:8443/storage/residences/photo.jpg',
+      ],
+      [
+        'requête sur l’API',
+        'https://api.dodovroum.com/storage/residences/photo.jpg?x=1',
+      ],
+      [
+        'autre dossier sur l’API',
+        'https://api.dodovroum.com/storage/users/photo.jpg',
+      ],
+      ['remontée de dossier', `${STORED}/../users/photo.jpg`],
       ['schéma relatif', '//evil.example/photo.jpg'],
       ['javascript:', 'javascript:alert(1)'],
       ['data:', 'data:image/png;base64,AAAA'],
@@ -213,7 +260,9 @@ describe('Sérialiseur public des résidences', () => {
     it('chaîne seule (format historique), doublons retirés, 20 au maximum', () => {
       expect(toPublicImages('seule.jpg')).toEqual([`${STORAGE}/seule.jpg`]);
       expect(
-        toPublicImages(JSON.stringify(['a.jpg', `${STORAGE}/a.jpg`])),
+        toPublicImages(
+          JSON.stringify(['a.jpg', `${STORED}/a.jpg`, `${STORAGE}/a.jpg`]),
+        ),
       ).toEqual([`${STORAGE}/a.jpg`]);
       const many = Array.from({ length: 30 }, (_, i) => `p${i}.jpg`);
       expect(toPublicImages(JSON.stringify(many))).toHaveLength(20);

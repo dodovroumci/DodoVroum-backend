@@ -42,8 +42,10 @@ Jamais exposés : `description` (V1), `address`, `latitude`, `longitude`, `owner
 propriétaire, `isActive`, `isVerified`, `moderationStatus`, `deletedAt`, `createdAt`, `updatedAt`,
 réservations, blocages (`reason`, `bookingId`), texte et auteurs des avis.
 
-**Images** : seules les URL `https://dodovroum.com/storage/residences/<fichier>` sont conservées
-(pas d'autre hôte, pas de `http`, de port, d'identifiants, de requête ni de sous-dossier). Un chemin
+**Images** : les URL renvoyées sont toujours `https://api.dodovroum.com/storage/residences/<fichier>`,
+l'origine qui sert réellement les fichiers (`dodovroum.com/storage` répond 404). En entrée, seules les
+URL enregistrées sur `https://dodovroum.com` ou `https://api.dodovroum.com`, dans `/storage/residences/`,
+sont conservées (pas d'autre hôte, pas de `http`, de port, d'identifiants, de requête ni de sous-dossier). Un chemin
 relatif est rattaché à ce stockage par son nom de fichier, comme dans `ResidencesService.parseImages`.
 L'image de remplacement `default-residence.png` n'est jamais renvoyée.
 
@@ -104,13 +106,13 @@ CORS : autorisé depuis `https://dodovroum.com` et `https://www.dodovroum.com` (
     "bedrooms": 4,
     "bathrooms": 3,
     "nombrePieces": 6,
-    "coverImageUrl": "https://dodovroum.com/storage/residences/demo-villa-1.jpg",
+    "coverImageUrl": "https://api.dodovroum.com/storage/residences/demo-villa-1.jpg",
     "rating": { "average": 4.7, "count": 12 },
     "url": "https://dodovroum.com/r/clx8k2m4p0001demo0000001",
     "amenities": ["WiFi", "Piscine", "Climatisation"],
     "images": [
-      "https://dodovroum.com/storage/residences/demo-villa-1.jpg",
-      "https://dodovroum.com/storage/residences/demo-villa-2.jpg"
+      "https://api.dodovroum.com/storage/residences/demo-villa-1.jpg",
+      "https://api.dodovroum.com/storage/residences/demo-villa-2.jpg"
     ]
   }
 }
@@ -147,7 +149,7 @@ Tout autre paramètre (notamment `isActive`, `status`, `proprietaireId`, `owner_
       "bedrooms": 4,
       "bathrooms": 3,
       "nombrePieces": 6,
-      "coverImageUrl": "https://dodovroum.com/storage/residences/demo-villa-1.jpg",
+      "coverImageUrl": "https://api.dodovroum.com/storage/residences/demo-villa-1.jpg",
       "rating": { "average": 4.7, "count": 12 },
       "url": "https://dodovroum.com/r/clx8k2m4p0001demo0000001"
     }
