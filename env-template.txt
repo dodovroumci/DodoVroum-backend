@@ -47,5 +47,8 @@ GENIUSPAY_API_URL="https://pay.genius.ci/public/api/v1/merchant/payments"
 GENIUSPAY_SUCCESS_URL="https://api.dodovroum.com/api/payments/redirect/success"
 GENIUSPAY_CANCEL_URL="https://api.dodovroum.com/api/payments/redirect/cancel"
 
+# API partenaire : « partenaire:empreinte SHA-256 » séparés par des virgules (voir docs/partner-api-v1.md)
+PARTNER_API_KEYS=
+
 # Configuration CORS
 CORS_ORIGIN="http://localhost:3000,http://localhost:8080"
