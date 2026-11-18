@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
+import { PaymentHistoryResponseDto } from './dto/payment-history.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { UpdatePaymentDto } from './dto/update-payment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -42,6 +43,14 @@ export class PaymentsController { // <--- VÉRIFIE BIEN LE "export" ICI
   @Get('my-payments')
   findMyPayments(@Request() req) {
     return this.paymentsService.findByUser(req.user.id);
+  }
+
+  /** Doit rester déclarée avant `@Get(':id')`, qui capturerait sinon « history ». */
+  @Get('history')
+  @ApiOperation({ summary: 'Historique des paiements du client connecté' })
+  @ApiResponse({ status: 200, type: PaymentHistoryResponseDto })
+  getHistory(@Request() req): Promise<PaymentHistoryResponseDto> {
+    return this.paymentsService.getHistory(req.user.id);
   }
 
   @Post('bookings/:bookingId/geniuspay/init')

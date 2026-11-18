@@ -24,6 +24,12 @@ import {
 import axios from 'axios';
 import * as https from 'https';
 import { computePaymentAmounts } from './payment-amounts';
+import {
+  buildPaymentHistory,
+  paymentHistorySelect,
+  paymentHistoryWhere,
+} from './payment-history.mapper';
+import { PaymentHistoryResponseDto } from './dto/payment-history.dto';
 
 /** Réservation encore en attente de paiement. */
 const PAYABLE_BOOKING_STATUSES: BookingStatus[] = [BookingStatus.AWAITING_PAYMENT, BookingStatus.PENDING];
@@ -607,6 +613,20 @@ export class PaymentsService {
       include: { booking: true },
       orderBy: { createdAt: 'desc' }
     });
+  }
+
+  /**
+   * Historique des paiements du client (GET /payments/history).
+   * Double filtrage : paiements de l'utilisateur ET réservations de l'utilisateur
+   * (requête), répété dans le mapper. Lecture via `payment` (sans extension de
+   * suppression logique) : les réservations supprimées restent dans l'historique.
+   */
+  async getHistory(userId: string): Promise<PaymentHistoryResponseDto> {
+    const rows = await this.prisma.payment.findMany({
+      where: paymentHistoryWhere(userId),
+      select: paymentHistorySelect,
+    });
+    return buildPaymentHistory(rows, userId, this.logger);
   }
 
   async findAll() {
