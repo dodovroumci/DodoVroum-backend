@@ -9,20 +9,14 @@ import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 
 /**
- * Extrait l’IP client (compatible reverse-proxy si `trust proxy` est activé côté Express).
+ * IP du client telle que calculée par Express (`req.ip`), seule source retenue.
+ *
+ * Derrière nginx, TRUST_PROXY active `trust proxy = 1` : req.ip est la dernière entrée de
+ * X-Forwarded-For, ajoutée par nginx. Les entrées précédentes, fournies par l’appelant,
+ * sont falsifiables : X-Forwarded-For n’est donc jamais lu directement ici.
+ * IP indéterminée → '' (refusée par le guard lorsque la whitelist est active).
  */
 export function getClientIp(req: Request): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.length > 0) {
-    return forwarded.split(',')[0].trim();
-  }
-  if (Array.isArray(forwarded) && forwarded[0]) {
-    return forwarded[0].split(',')[0].trim();
-  }
-  const socketIp = req.socket?.remoteAddress;
-  if (socketIp) {
-    return normalizeIp(socketIp);
-  }
   return normalizeIp(req.ip ?? '');
 }
 
